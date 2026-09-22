@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "threeui": {
+      "type": "http",
+      "url": "https://threeui.com/api/mcp"
+    }
+  }
+}

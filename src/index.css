@@ -1,0 +1,130 @@
+@import 'tailwindcss';
+@import 'leaflet/dist/leaflet.css';
+@import '@fontsource-variable/space-grotesk';
+@import '@fontsource-variable/jetbrains-mono';
+
+@theme {
+  --color-ink: #15130f;
+  --color-ink-soft: #2a2620;
+  --color-paper: #faf6ec;
+  --color-paper-dim: #efe8d8;
+  --color-accent: #f2540c;
+  --color-accent-dim: #c94509;
+  --color-brand-success: #1b7a4d;
+  --color-brand-error: #c81e3a;
+
+  --font-display: 'Space Grotesk Variable', 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-display);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+}
+
+#root {
+  min-height: 100svh;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+/* Subtle print-grain texture — the thing that keeps flat color fields from
+   reading as a generic gradient-and-glass AI template. */
+.bg-grain {
+  position: relative;
+}
+.bg-grain::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+}
+
+/* A cut top-right corner — the recurring "ticket stub" motif tying buttons,
+   badges, and cards back to the billboard/print-poster brand mark. */
+.clip-corner {
+  clip-path: polygon(
+    0 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% 100%,
+    0 100%
+  );
+}
+
+/* "You are here" radar pulse around the current-location marker. */
+@keyframes locate-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+.animate-locate-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: locate-pulse 1.8s ease-out infinite;
+}
+
+/* Leaflet needs an explicit height on its container. */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  font-family: var(--font-display);
+}
+
+/* Reskin Leaflet's default popup chrome to match the ink/paper/accent brand
+   instead of its stock rounded white bubble. */
+.leaflet-popup-content-wrapper {
+  border-radius: 0;
+  border: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
+  background: var(--color-paper);
+  box-shadow: 2px 2px 0 var(--color-ink);
+}
+.leaflet-popup-content {
+  margin: 10px 12px;
+}
+.leaflet-popup-tip {
+  border-radius: 0;
+  background: var(--color-paper);
+}
+.leaflet-popup-close-button {
+  color: var(--color-ink) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .leaflet-popup-content-wrapper {
+    border-color: color-mix(in srgb, var(--color-paper) 15%, transparent);
+    background: var(--color-ink-soft);
+    box-shadow: 2px 2px 0 var(--color-paper);
+  }
+  .leaflet-popup-tip {
+    background: var(--color-ink-soft);
+  }
+  .leaflet-popup-close-button {
+    color: var(--color-paper) !important;
+  }
+}
