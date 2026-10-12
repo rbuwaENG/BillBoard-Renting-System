@@ -9,6 +9,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Public anon key — safe to expose (protected by Row Level Security).
+      # Needed because src/lib/supabase.ts calls createClient() at import
+      # time, which throws if the URL/key are empty, even for tests that
+      # never make a network call.
+      VITE_SUPABASE_URL: https://rgdnbhrzhwgasthpuwmw.supabase.co
+      VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnZG5iaHJ6aHdnYXN0aHB1d213Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4MTMxNDAsImV4cCI6MjEwNzM4OTE0MH0.9lzqJ1OR8slHdKB0qOOddZ7GRnyW7mWiuFJ_Vw1G2Y0
     steps:
       - uses: actions/checkout@v4
 
