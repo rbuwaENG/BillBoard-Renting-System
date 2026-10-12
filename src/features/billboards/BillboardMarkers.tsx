@@ -2,7 +2,8 @@ import L from 'leaflet'
 import { ChevronRight } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { Marker, Popup, useMap } from 'react-leaflet'
-import type { MockBillboard } from './mockBillboards'
+import { useFormatPrice } from '@/features/admin/useCurrencySetting'
+import type { BillboardWithDetails } from './useBillboards'
 
 // Same glyph as the brand mark (src/components/BillboardMark.tsx), inlined
 // as raw SVG since Leaflet's divIcon only accepts an HTML string, not a
@@ -15,9 +16,9 @@ const BILLBOARD_GLYPH = `
   </svg>
 `
 
-function priceTagIcon(price: number) {
+function priceTagIcon(formattedPrice: string) {
   return L.divIcon({
-    html: `<div class="flex w-max items-center gap-1 justify-center border border-paper/40 bg-ink px-2 py-1 font-mono text-[11px] font-semibold whitespace-nowrap text-paper shadow-md">${BILLBOARD_GLYPH}$${price}</div>`,
+    html: `<div class="flex w-max items-center gap-1 justify-center border border-paper/40 bg-ink px-2 py-1 font-mono text-[11px] font-semibold whitespace-nowrap text-paper shadow-md">${BILLBOARD_GLYPH}${formattedPrice}</div>`,
     className: '',
     iconSize: [64, 24],
     iconAnchor: [32, 24],
@@ -25,7 +26,7 @@ function priceTagIcon(price: number) {
 }
 
 interface BillboardMarkersProps {
-  billboards: MockBillboard[]
+  billboards: BillboardWithDetails[]
   selectedId: string | null
   onViewDetails: (id: string) => void
 }
@@ -36,6 +37,7 @@ export function BillboardMarkers({
   onViewDetails,
 }: BillboardMarkersProps) {
   const map = useMap()
+  const formatPrice = useFormatPrice()
   const markerRefs = useRef<Record<string, L.Marker | null>>({})
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export function BillboardMarkers({
         <Marker
           key={billboard.id}
           position={[billboard.location.lat, billboard.location.lng]}
-          icon={priceTagIcon(billboard.pricePerDay)}
+          icon={priceTagIcon(formatPrice(billboard.pricePerDay))}
           ref={(ref) => {
             markerRefs.current[billboard.id] = ref
           }}
@@ -77,7 +79,7 @@ export function BillboardMarkers({
                 {billboard.location.city} · {billboard.size}
               </p>
               <p className="mt-1.5 font-mono text-sm font-semibold text-accent">
-                ${billboard.pricePerDay}
+                {formatPrice(billboard.pricePerDay)}
                 <span className="text-ink/40 dark:text-paper/40">/day</span>
               </p>
               <span className="mt-2 flex items-center gap-0.5 border-t border-ink/10 pt-1.5 text-[11px] font-medium text-accent dark:border-paper/15">

@@ -2,9 +2,10 @@ import { Check, Plus, Star } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { BillboardMark } from '@/components'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
+import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
-import type { MockBillboard } from './mockBillboards'
+import type { BillboardWithDetails } from './useBillboards'
 
 // Deterministic placeholder "photo" panel — no stock images, so nothing
 // depends on an external host. Category text plus a faded brand glyph reads
@@ -56,7 +57,7 @@ function PlaceholderPhoto({
 }
 
 interface BillboardCardProps {
-  billboard: MockBillboard
+  billboard: BillboardWithDetails
   selected?: boolean
   onClick?: () => void
   distanceKm?: number
@@ -68,6 +69,7 @@ export function BillboardCard({
   onClick,
   distanceKm,
 }: BillboardCardProps) {
+  const formatPrice = useFormatPrice()
   return (
     <div
       role="button"
@@ -97,7 +99,7 @@ export function BillboardCard({
         </p>
         <div className="mt-2 flex items-center justify-between">
           <span className="font-mono text-sm font-semibold text-accent">
-            ${billboard.pricePerDay}
+            {formatPrice(billboard.pricePerDay)}
             <span className="text-ink/40 dark:text-paper/40">/day</span>
           </span>
           <span className="flex items-center gap-1 font-mono text-xs text-ink/60 dark:text-paper/60">

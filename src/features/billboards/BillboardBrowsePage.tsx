@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { MapContainer, TileLayer, ZoomControl } from 'react-leaflet'
 import { RenterBookingsControl } from '@/features/renter'
-import { MOCK_BOOKINGS } from '@/features/renter/mockBookings'
+import { useMyBookings } from '@/features/renter/useMyBookings'
 import { useAuth } from '@/hooks/useAuth'
 import { usePrefersDark } from '@/hooks/usePrefersDark'
 import { distanceKm } from '@/lib/geohash'
@@ -11,11 +11,8 @@ import { BillboardPanel } from './BillboardPanel'
 import { CurrentLocationLayer } from './CurrentLocationLayer'
 import type { LocateStatus } from './locateStatus'
 import { MapOverlayControls } from './MapOverlayControls'
-import { MOCK_BILLBOARDS, type MockBillboard } from './mockBillboards'
+import { useBillboards, useBillboardsNear, type BillboardWithDetails } from './useBillboards'
 
-// Default map center is a placeholder shown until (or unless) the browser's
-// current location resolves; Phase 4 ("Public browse & map", PLAN.md
-// section 7) replaces MOCK_BILLBOARDS with a live Firestore query.
 const DEFAULT_CENTER: [number, number] = [20.5937, 78.9629]
 const MIN_ZOOM = 3
 const MAX_ZOOM = 15
@@ -34,29 +31,27 @@ const DARK_TILE_URL =
 const TILE_ATTRIBUTION =
   'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community'
 
-const CATEGORIES = Array.from(new Set(MOCK_BILLBOARDS.map((b) => b.category)))
-const SIZES = Array.from(new Set(MOCK_BILLBOARDS.map((b) => b.size)))
-const PRICES = MOCK_BILLBOARDS.map((b) => b.pricePerDay)
-const PRICE_BOUNDS: [number, number] = [
-  Math.floor(Math.min(...PRICES) / 10) * 10,
-  Math.ceil(Math.max(...PRICES) / 10) * 10,
-]
-const MY_BILLBOARD_IDS = new Set(MOCK_BOOKINGS.map((b) => b.billboardId))
-
 export function BillboardBrowsePage() {
   const { role } = useAuth()
+  const { data: billboardsData } = useBillboards()
+  const { data: myBookings } = useMyBookings()
+  const billboards = useMemo(() => billboardsData ?? [], [billboardsData])
+  const myBillboardIds = useMemo(
+    () => new Set((myBookings ?? []).map((b) => b.billboardId)),
+    [myBookings],
+  )
+
   const [locateStatus, setLocateStatus] = useState<LocateStatus>('locating')
   const [userCoords, setUserCoords] = useState<[number, number] | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [detailBillboard, setDetailBillboard] = useState<MockBillboard | null>(
-    null,
-  )
+  const [detailBillboard, setDetailBillboard] =
+    useState<BillboardWithDetails | null>(null)
   const [query, setQuery] = useState('')
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
     new Set(),
   )
   const [selectedSizes, setSelectedSizes] = useState<Set<string>>(new Set())
-  const [priceMax, setPriceMax] = useState(PRICE_BOUNDS[1])
+  const [priceMax, setPriceMax] = useState<number | null>(null)
   const [myBillboardsActive, setMyBillboardsActive] = useState(false)
   const [nearMeActive, setNearMeActive] = useState(false)
   const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS_KM)
@@ -66,9 +61,39 @@ export function BillboardBrowsePage() {
   const systemPrefersDark = usePrefersDark()
   const isDark = manualDark ?? systemPrefersDark
 
+  const { data: nearBillboardsData } = useBillboardsNear(
+    nearMeActive ? (userCoords?.[0] ?? null) : null,
+    nearMeActive ? (userCoords?.[1] ?? null) : null,
+    radiusKm,
+  )
+
+  const CATEGORIES = useMemo(
+    () => Array.from(new Set(billboards.map((b) => b.category))),
+    [billboards],
+  )
+  const SIZES = useMemo(
+    () => Array.from(new Set(billboards.map((b) => b.size))),
+    [billboards],
+  )
+  const PRICE_BOUNDS = useMemo((): [number, number] => {
+    if (billboards.length === 0) return [0, 100]
+    const prices = billboards.map((b) => b.pricePerDay)
+    return [
+      Math.floor(Math.min(...prices) / 10) * 10,
+      Math.ceil(Math.max(...prices) / 10) * 10,
+    ]
+  }, [billboards])
+  const effectivePriceMax = priceMax ?? PRICE_BOUNDS[1]
+
+  const baseList = useMemo(
+    () => (nearMeActive ? (nearBillboardsData ?? []) : billboards),
+    [nearMeActive, nearBillboardsData, billboards],
+  )
+
   function handleSelect(id: string) {
     setSelectedId(id)
-    setDetailBillboard(MOCK_BILLBOARDS.find((b) => b.id === id) ?? null)
+    const list = nearMeActive ? (nearBillboardsData ?? billboards) : billboards
+    setDetailBillboard(list.find((b) => b.id === id) ?? null)
   }
 
   function toggleCategory(category: string) {
@@ -96,7 +121,7 @@ export function BillboardBrowsePage() {
 
   const searched = useMemo(() => {
     const q = query.trim().toLowerCase()
-    let list = MOCK_BILLBOARDS
+    let list = baseList
     if (q) {
       list = list.filter((b) =>
         `${b.title} ${b.location.city} ${b.category}`
@@ -110,12 +135,20 @@ export function BillboardBrowsePage() {
     if (selectedSizes.size > 0) {
       list = list.filter((b) => selectedSizes.has(b.size))
     }
-    list = list.filter((b) => b.pricePerDay <= priceMax)
+    list = list.filter((b) => b.pricePerDay <= effectivePriceMax)
     if (myBillboardsActive) {
-      list = list.filter((b) => MY_BILLBOARD_IDS.has(b.id))
+      list = list.filter((b) => myBillboardIds.has(b.id))
     }
     return list
-  }, [query, selectedCategories, selectedSizes, priceMax, myBillboardsActive])
+  }, [
+    baseList,
+    query,
+    selectedCategories,
+    selectedSizes,
+    effectivePriceMax,
+    myBillboardsActive,
+    myBillboardIds,
+  ])
 
   const baseEmptyMessage = myBillboardsActive
     ? "No billboards match your filters among the ones you've booked."
@@ -136,7 +169,6 @@ export function BillboardBrowsePage() {
         billboard: b,
         km: distanceKm(userCoords, [b.location.lat, b.location.lng]),
       }))
-      .filter((x) => x.km <= radiusKm)
       .sort((a, b) => a.km - b.km)
 
     return {
@@ -178,6 +210,7 @@ export function BillboardBrowsePage() {
       </MapContainer>
 
       <MapOverlayControls
+        billboards={billboards}
         isDark={isDark}
         onToggleTheme={() => setManualDark(!isDark)}
         categories={CATEGORIES}
@@ -187,7 +220,7 @@ export function BillboardBrowsePage() {
         selectedSizes={selectedSizes}
         onToggleSize={toggleSize}
         priceBounds={PRICE_BOUNDS}
-        priceMax={priceMax}
+        priceMax={effectivePriceMax}
         onPriceMaxChange={setPriceMax}
         myBillboardsActive={myBillboardsActive}
         onToggleMyBillboards={() => setMyBillboardsActive((v) => !v)}
@@ -220,6 +253,7 @@ export function BillboardBrowsePage() {
       <BillboardDetailDialog
         billboard={detailBillboard}
         onClose={() => setDetailBillboard(null)}
+        userCoords={userCoords}
       />
     </div>
   )

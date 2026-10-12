@@ -1,6 +1,9 @@
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
-import { Badge, BillboardMark, Button } from '@/components'
-import { useAuthStore } from '@/hooks/useAuth'
+import { z } from 'zod'
+import { BillboardMark, Button } from '@/components'
+import { supabase } from '@/lib/supabase'
 import type { UserRole } from '@/types'
 
 const ROLE_HOME: Record<UserRole, string> = {
@@ -9,23 +12,39 @@ const ROLE_HOME: Record<UserRole, string> = {
   admin: '/admin',
 }
 
-const BYPASS_ROLES: { role: UserRole; label: string }[] = [
-  { role: 'renter', label: 'Renter' },
-  { role: 'rentor', label: 'Rentor (owner)' },
-  { role: 'admin', label: 'Admin' },
-]
+const loginSchema = z.object({
+  email: z.string().email('Enter a valid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+})
 
-// Phase 2 ("Auth & roles", PLAN.md section 7) replaces the email/password
-// form below with real Firebase Auth. Until a Firebase project exists, the
-// "preview" section is the only way to reach role-gated routes — it's
-// import.meta.env.DEV-only so it never ships in a production build.
+type LoginFormValues = z.infer<typeof loginSchema>
+
 export function LoginPage() {
   const navigate = useNavigate()
-  const mockLogin = useAuthStore((s) => s.mockLogin)
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) })
 
-  function bypassAs(role: UserRole) {
-    mockLogin(role)
-    navigate(ROLE_HOME[role])
+  async function onSubmit(values: LoginFormValues) {
+    const { data, error } = await supabase.auth.signInWithPassword(values)
+    if (error) {
+      setError('root', { message: error.message })
+      return
+    }
+
+    const userId = data.user?.id
+    const { data: profile } = userId
+      ? await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', userId)
+          .single()
+      : { data: null }
+
+    navigate(ROLE_HOME[(profile?.role as UserRole) ?? 'renter'])
   }
 
   return (
@@ -51,7 +70,7 @@ export function LoginPage() {
       </div>
 
       <div className="flex items-center justify-center px-4 py-12 sm:px-10">
-        <div className="w-full max-w-sm">
+        <form onSubmit={handleSubmit(onSubmit)} className="w-full max-w-sm">
           <h2 className="font-display text-2xl font-semibold tracking-tight">
             Log in
           </h2>
@@ -66,10 +85,15 @@ export function LoginPage() {
               </span>
               <input
                 type="email"
-                disabled
                 placeholder="you@example.com"
-                className="w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none disabled:cursor-not-allowed dark:border-paper/20 dark:placeholder:text-paper/30"
+                {...register('email')}
+                className="w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30"
               />
+              {errors.email && (
+                <span className="mt-1 block text-xs text-brand-error">
+                  {errors.email.message}
+                </span>
+              )}
             </label>
 
             <label className="block">
@@ -78,14 +102,25 @@ export function LoginPage() {
               </span>
               <input
                 type="password"
-                disabled
                 placeholder="••••••••"
-                className="w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none disabled:cursor-not-allowed dark:border-paper/20 dark:placeholder:text-paper/30"
+                {...register('password')}
+                className="w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30"
               />
+              {errors.password && (
+                <span className="mt-1 block text-xs text-brand-error">
+                  {errors.password.message}
+                </span>
+              )}
             </label>
 
-            <Button disabled className="w-full">
-              Log in
+            {errors.root && (
+              <span className="block text-xs text-brand-error">
+                {errors.root.message}
+              </span>
+            )}
+
+            <Button type="submit" disabled={isSubmitting} className="w-full">
+              {isSubmitting ? 'Logging in…' : 'Log in'}
             </Button>
           </div>
 
@@ -95,32 +130,7 @@ export function LoginPage() {
               Sign up
             </Link>
           </p>
-
-          {import.meta.env.DEV && (
-            <div className="mt-8 border-t border-dashed border-ink/20 pt-6 dark:border-paper/20">
-              <div className="flex items-center gap-2">
-                <Badge variant="accent">Preview</Badge>
-                <span className="text-xs text-ink/50 dark:text-paper/50">
-                  No Firebase project yet — continue as a role to preview it.
-                </span>
-              </div>
-              <div className="mt-3 grid grid-cols-1 gap-2">
-                {BYPASS_ROLES.map(({ role, label }) => (
-                  <Button
-                    key={role}
-                    type="button"
-                    variant="secondary"
-                    className="w-full justify-between normal-case"
-                    onClick={() => bypassAs(role)}
-                  >
-                    <span>Continue as {label}</span>
-                    <span className="text-accent">→</span>
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        </form>
       </div>
     </div>
   )

@@ -1,7 +1,9 @@
 import { Flag } from 'lucide-react'
 import { Badge, BillboardMark, Button, Card } from '@/components'
+import { useSetBillboardStatus } from '@/features/rentor/useRentorBillboards'
 import { cn } from '@/lib/utils'
-import { usePlatformBillboardsStore } from './platformBillboardsStore'
+import { useAdminBillboards } from './useAdminBillboards'
+import { useFormatPrice } from './useCurrencySetting'
 
 const STATUS_CLASSES: Record<string, string> = {
   active: 'border-brand-success/40 text-brand-success',
@@ -10,8 +12,10 @@ const STATUS_CLASSES: Record<string, string> = {
 }
 
 export function ModerationPanel() {
-  const billboards = usePlatformBillboardsStore((s) => s.billboards)
-  const setStatus = usePlatformBillboardsStore((s) => s.setStatus)
+  const formatPrice = useFormatPrice()
+  const { data } = useAdminBillboards()
+  const billboards = data ?? []
+  const setStatus = useSetBillboardStatus()
 
   return (
     <div className="space-y-3">
@@ -31,7 +35,7 @@ export function ModerationPanel() {
               </Badge>
             </div>
             <p className="mt-0.5 truncate font-mono text-[11px] tracking-wide text-ink/50 uppercase dark:text-paper/50">
-              {b.ownerName} · {b.location.city} · ${b.pricePerDay}/day
+              {b.ownerName} · {b.location.city} · {formatPrice(b.pricePerDay)}/day
             </p>
           </div>
 
@@ -40,7 +44,7 @@ export function ModerationPanel() {
               <Button
                 size="sm"
                 variant="danger"
-                onClick={() => setStatus(b.id, 'flagged')}
+                onClick={() => setStatus.mutate({ id: b.id, status: 'flagged' })}
               >
                 <Flag className="size-3.5" />
                 Flag
@@ -50,7 +54,7 @@ export function ModerationPanel() {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => setStatus(b.id, 'inactive')}
+                onClick={() => setStatus.mutate({ id: b.id, status: 'inactive' })}
               >
                 Unpublish
               </Button>
@@ -59,7 +63,7 @@ export function ModerationPanel() {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => setStatus(b.id, 'active')}
+                onClick={() => setStatus.mutate({ id: b.id, status: 'active' })}
               >
                 Restore
               </Button>

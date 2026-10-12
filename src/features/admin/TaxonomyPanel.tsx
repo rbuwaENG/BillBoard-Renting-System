@@ -1,15 +1,24 @@
 import { Plus, Tags, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Button, Card } from '@/components'
-import { useTaxonomyStore } from './taxonomyStore'
+import {
+  useAddCategory,
+  useAddSize,
+  useCategories,
+  useRemoveCategory,
+  useRemoveSize,
+  useSizes,
+} from './useTaxonomy'
 
 export function TaxonomyPanel() {
-  const categories = useTaxonomyStore((s) => s.categories)
-  const sizes = useTaxonomyStore((s) => s.sizes)
-  const addCategory = useTaxonomyStore((s) => s.addCategory)
-  const removeCategory = useTaxonomyStore((s) => s.removeCategory)
-  const addSize = useTaxonomyStore((s) => s.addSize)
-  const removeSize = useTaxonomyStore((s) => s.removeSize)
+  const { data: categoriesData } = useCategories()
+  const { data: sizesData } = useSizes()
+  const categories = categoriesData ?? []
+  const sizes = sizesData ?? []
+  const addCategory = useAddCategory()
+  const removeCategory = useRemoveCategory()
+  const addSize = useAddSize()
+  const removeSize = useRemoveSize()
 
   const [categoryName, setCategoryName] = useState('')
   const [sizeLabel, setSizeLabel] = useState('')
@@ -20,7 +29,7 @@ export function TaxonomyPanel() {
     e.preventDefault()
     const name = categoryName.trim()
     if (!name) return
-    addCategory(name)
+    addCategory.mutate(name)
     setCategoryName('')
   }
 
@@ -30,7 +39,7 @@ export function TaxonomyPanel() {
     const width = Number(sizeWidth)
     const height = Number(sizeHeight)
     if (!label || !width || !height) return
-    addSize({ label, width, height })
+    addSize.mutate({ label, width, height })
     setSizeLabel('')
     setSizeWidth('')
     setSizeHeight('')
@@ -66,7 +75,7 @@ export function TaxonomyPanel() {
               {c.name}
               <button
                 type="button"
-                onClick={() => removeCategory(c.id)}
+                onClick={() => removeCategory.mutate(c.id)}
                 title="Remove category"
                 className="text-ink/40 hover:text-brand-error dark:text-paper/40"
               >
@@ -123,7 +132,7 @@ export function TaxonomyPanel() {
               {sz.label}
               <button
                 type="button"
-                onClick={() => removeSize(sz.id)}
+                onClick={() => removeSize.mutate(sz.id)}
                 title="Remove size"
                 className="text-ink/40 hover:text-brand-error dark:text-paper/40"
               >

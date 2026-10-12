@@ -1,11 +1,9 @@
 import { Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { Badge, Button, Card } from '@/components'
-import {
-  MOCK_BILLBOARDS,
-  type MockBillboard,
-} from '@/features/billboards/mockBillboards'
+import { useBillboards, type BillboardWithDetails } from '@/features/billboards/useBillboards'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
+import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { formatDateRange } from './formatDateRange'
 
 interface CampaignsTabProps {
@@ -16,6 +14,9 @@ interface CampaignsTabProps {
 // map-corner FolderPlus popover in MapOverlayControls.tsx) so it's
 // discoverable from the same panel where bookings/messages already live.
 export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
+  const formatPrice = useFormatPrice()
+  const { data: billboardsData } = useBillboards()
+  const billboards = billboardsData ?? []
   const draftIds = useCampaignStore((s) => s.draftIds)
   const removeFromDraft = useCampaignStore((s) => s.removeFromDraft)
   const createCampaign = useCampaignStore((s) => s.createCampaign)
@@ -27,8 +28,8 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
   const [endDate, setEndDate] = useState('')
 
   const draftBillboards = draftIds
-    .map((id) => MOCK_BILLBOARDS.find((b) => b.id === id))
-    .filter((b): b is MockBillboard => Boolean(b))
+    .map((id) => billboards.find((b) => b.id === id))
+    .filter((b): b is BillboardWithDetails => Boolean(b))
 
   const draftDays =
     startDate && endDate
@@ -118,7 +119,7 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
           </div>
           {draftDays > 0 && draftBillboards.length > 0 && (
             <p className="text-right font-mono text-xs text-accent">
-              Est. total ${draftTotal.toLocaleString()}
+              Est. total {formatPrice(draftTotal)}
             </p>
           )}
           <Button
@@ -153,8 +154,8 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
           <div className="mt-3 space-y-3">
             {campaigns.map((campaign) => {
               const campaignBillboards = campaign.billboardIds
-                .map((id) => MOCK_BILLBOARDS.find((b) => b.id === id))
-                .filter((b): b is MockBillboard => Boolean(b))
+                .map((id) => billboards.find((b) => b.id === id))
+                .filter((b): b is BillboardWithDetails => Boolean(b))
               const days = Math.max(
                 1,
                 Math.round(
@@ -182,7 +183,7 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <span className="font-mono text-sm font-semibold text-accent">
-                        ${total.toLocaleString()}
+                        {formatPrice(total)}
                       </span>
                       <button
                         type="button"

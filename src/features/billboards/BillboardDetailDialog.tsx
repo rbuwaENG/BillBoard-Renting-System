@@ -1,22 +1,124 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Check, MessageCircle, Plus, Star, X } from 'lucide-react'
+import { Calendar, Check, MessageCircle, Plus, Star, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Badge, BillboardMark, Button } from '@/components'
+import { useRequestBooking } from '@/features/bookings/useRequestBooking'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
 import { ChatPanel } from '@/features/chat/ChatPanel'
+import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { useAuth } from '@/hooks/useAuth'
+import { distanceKm } from '@/lib/geohash'
 import { cn } from '@/lib/utils'
-import type { MockBillboard } from './mockBillboards'
+import type { TrafficLevel } from '@/types'
+import { useDistrictProfile } from './useDistrictProfile'
+import type { BillboardWithDetails } from './useBillboards'
 
 interface BillboardDetailDialogProps {
-  billboard: MockBillboard | null
+  billboard: BillboardWithDetails | null
   onClose: () => void
+  userCoords: [number, number] | null
 }
 
-// Rough day/week/month packages computed from the daily rate — Phase 4
-// ("Public browse & map") replaces this with real pricing tiers stored per
-// billboard once the categories/sizes/pricing admin panel (Phase 9) exists.
+const TRAFFIC_LABEL: Record<TrafficLevel, string> = {
+  light: 'Light',
+  moderate: 'Moderate',
+  heavy: 'Heavy',
+}
+
+const TRAFFIC_BADGE_CLASSES: Record<TrafficLevel, string> = {
+  light: 'border-brand-success/40 text-brand-success',
+  moderate: 'border-accent/40 text-accent',
+  heavy: 'border-brand-error/40 text-brand-error',
+}
+
+function formatPopulation(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`
+  return String(n)
+}
+
+function SiteInsights({
+  billboard,
+  userCoords,
+}: {
+  billboard: BillboardWithDetails
+  userCoords: [number, number] | null
+}) {
+  const { data: districtProfile } = useDistrictProfile(billboard.district)
+  const proximityKm = userCoords
+    ? distanceKm(userCoords, [billboard.location.lat, billboard.location.lng])
+    : null
+
+  return (
+    <div className="border-t border-ink/10 pt-4 dark:border-paper/10">
+      <span className="font-mono text-xs tracking-widest text-ink/40 uppercase dark:text-paper/40">
+        Site insights
+      </span>
+      <div className="mt-2 grid grid-cols-2 gap-3">
+        <div className="border border-ink/10 p-3 dark:border-paper/15">
+          <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
+            District
+          </span>
+          <p className="mt-1 text-sm text-ink dark:text-paper">
+            {billboard.district ?? 'Not available'}
+          </p>
+        </div>
+
+        <div className="border border-ink/10 p-3 dark:border-paper/15">
+          <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
+            Traffic
+          </span>
+          <p className="mt-1">
+            {billboard.trafficLevel ? (
+              <Badge className={TRAFFIC_BADGE_CLASSES[billboard.trafficLevel]}>
+                {TRAFFIC_LABEL[billboard.trafficLevel]}
+              </Badge>
+            ) : (
+              <span className="text-sm text-ink/50 dark:text-paper/50">
+                Not reported
+              </span>
+            )}
+          </p>
+        </div>
+
+        <div className="border border-ink/10 p-3 dark:border-paper/15">
+          <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
+            Audience (district)
+          </span>
+          {districtProfile ? (
+            <>
+              <p className="mt-1 text-sm text-ink dark:text-paper">
+                {formatPopulation(districtProfile.population)} people
+              </p>
+              <p className="font-mono text-[11px] text-ink/50 dark:text-paper/50">
+                {Math.round(districtProfile.populationDensity).toLocaleString()}
+                /km² · 2012 Census
+              </p>
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-ink/50 dark:text-paper/50">—</p>
+          )}
+        </div>
+
+        <div className="border border-ink/10 p-3 dark:border-paper/15">
+          <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
+            Proximity
+          </span>
+          <p className="mt-1 text-sm text-ink dark:text-paper">
+            {proximityKm !== null
+              ? `${proximityKm.toFixed(1)} km from your location`
+              : '—'}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Rough day/week/month packages computed from the daily rate — a future
+// admin-managed pricing tiers feature could replace this with real tiers
+// stored per billboard.
 function pricingPackages(pricePerDay: number) {
   return [
     { label: 'Day', price: pricePerDay },
@@ -25,13 +127,105 @@ function pricingPackages(pricePerDay: number) {
   ]
 }
 
+function RequestBookingForm({
+  billboard,
+  onDone,
+}: {
+  billboard: BillboardWithDetails
+  onDone: () => void
+}) {
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [creativeUrl, setCreativeUrl] = useState('')
+  const requestBooking = useRequestBooking()
+
+  async function handleSubmit() {
+    if (!startDate || !endDate) return
+    try {
+      await requestBooking.mutateAsync({
+        billboardId: billboard.id,
+        startDate,
+        endDate,
+        creativeUrl: creativeUrl.trim() || undefined,
+      })
+      onDone()
+    } catch {
+      // error surfaced via requestBooking.error below
+    }
+  }
+
+  return (
+    <div className="space-y-4 border-t border-ink/10 pt-4 dark:border-paper/10">
+      <span className="font-mono text-xs tracking-widest text-ink/40 uppercase dark:text-paper/40">
+        Request booking
+      </span>
+
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="mb-1 block font-mono text-[11px] text-ink/50 uppercase dark:text-paper/50">
+            Start
+          </span>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full border-b border-ink/20 bg-transparent py-1.5 text-sm focus:border-accent focus:outline-none dark:border-paper/20"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block font-mono text-[11px] text-ink/50 uppercase dark:text-paper/50">
+            End
+          </span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-full border-b border-ink/20 bg-transparent py-1.5 text-sm focus:border-accent focus:outline-none dark:border-paper/20"
+          />
+        </label>
+      </div>
+
+      <label className="block">
+        <span className="mb-1 block font-mono text-[11px] text-ink/50 uppercase dark:text-paper/50">
+          Creative URL (optional)
+        </span>
+        <input
+          type="url"
+          value={creativeUrl}
+          onChange={(e) => setCreativeUrl(e.target.value)}
+          placeholder="https://…"
+          className="w-full border-b border-ink/20 bg-transparent py-1.5 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30"
+        />
+      </label>
+
+      {requestBooking.isError && (
+        <p className="text-xs text-brand-error">
+          {(requestBooking.error as Error).message}
+        </p>
+      )}
+
+      <Button
+        onClick={handleSubmit}
+        disabled={!startDate || !endDate || requestBooking.isPending}
+        className="w-full"
+      >
+        {requestBooking.isPending ? 'Sending request…' : 'Send booking request'}
+      </Button>
+    </div>
+  )
+}
+
 export function BillboardDetailDialog({
   billboard,
   onClose,
+  userCoords,
 }: BillboardDetailDialogProps) {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const formatPrice = useFormatPrice()
   const [showChat, setShowChat] = useState(false)
+  const [showBookingForm, setShowBookingForm] = useState(false)
+  const [requestSent, setRequestSent] = useState(false)
   const inDraft = useCampaignStore((s) =>
     billboard ? s.draftIds.includes(billboard.id) : false,
   )
@@ -39,6 +233,8 @@ export function BillboardDetailDialog({
 
   useEffect(() => {
     setShowChat(false)
+    setShowBookingForm(false)
+    setRequestSent(false)
   }, [billboard?.id])
 
   function requireLogin(action: () => void) {
@@ -49,6 +245,8 @@ export function BillboardDetailDialog({
     }
     action()
   }
+
+  const isOwner = billboard && user && user.uid === billboard.ownerId
 
   return (
     <Dialog.Root
@@ -155,6 +353,8 @@ export function BillboardDetailDialog({
                     </div>
                   </div>
 
+                  <SiteInsights billboard={billboard} userCoords={userCoords} />
+
                   <div className="border-t border-ink/10 pt-4 dark:border-paper/10">
                     <span className="font-mono text-xs tracking-widest text-ink/40 uppercase dark:text-paper/40">
                       Packages
@@ -169,7 +369,7 @@ export function BillboardDetailDialog({
                             {pkg.label}
                           </span>
                           <p className="mt-1 font-mono text-sm font-semibold text-accent">
-                            ${pkg.price}
+                            {formatPrice(pkg.price)}
                           </p>
                         </div>
                       ))}
@@ -186,17 +386,15 @@ export function BillboardDetailDialog({
                         <p className="text-sm font-medium text-ink dark:text-paper">
                           {billboard.ownerName}
                         </p>
-                        <Button
-                          onClick={() => setShowChat(true)}
-                          className="w-full"
-                        >
-                          <MessageCircle className="size-4" />
-                          Message {billboard.ownerName.split(' ')[0]}
-                        </Button>
-                        <p className="text-xs text-ink/40 dark:text-paper/40">
-                          In-app chat — owner inbox + booking requests land in
-                          Phase 6.
-                        </p>
+                        {!isOwner && (
+                          <Button
+                            onClick={() => setShowChat(true)}
+                            className="w-full"
+                          >
+                            <MessageCircle className="size-4" />
+                            Message {billboard.ownerName.split(' ')[0]}
+                          </Button>
+                        )}
                       </div>
                     ) : (
                       <div className="mt-2 space-y-3">
@@ -216,6 +414,33 @@ export function BillboardDetailDialog({
                       </div>
                     )}
                   </div>
+
+                  {!isOwner &&
+                    (requestSent ? (
+                      <p className="border-t border-ink/10 pt-4 text-sm text-brand-success dark:border-paper/10">
+                        Booking request sent — track its status from "My
+                        activity".
+                      </p>
+                    ) : showBookingForm ? (
+                      <RequestBookingForm
+                        billboard={billboard}
+                        onDone={() => {
+                          setShowBookingForm(false)
+                          setRequestSent(true)
+                        }}
+                      />
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        onClick={() =>
+                          requireLogin(() => setShowBookingForm(true))
+                        }
+                        className="w-full"
+                      >
+                        <Calendar className="size-4" />
+                        Request booking
+                      </Button>
+                    ))}
                 </div>
               )}
             </>

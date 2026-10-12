@@ -1,9 +1,9 @@
 import { Card } from '@/components'
-import { MOCK_BOOKINGS } from '@/features/renter/mockBookings'
-import { useRentorBookingStore } from '@/features/rentor/rentorBookingStore'
-import type { Booking, BookingStatus } from '@/types'
-import { usePlatformBillboardsStore } from './platformBillboardsStore'
-import { useUserStore } from './userStore'
+import type { BookingStatus } from '@/types'
+import { useAdminBillboards } from './useAdminBillboards'
+import { useAllBookings } from './useAdminBookings'
+import { useFormatPrice } from './useCurrencySetting'
+import { useAllUsers } from './useUsers'
 
 const REVENUE_STATUSES = new Set<BookingStatus>([
   'payment_pending',
@@ -23,17 +23,14 @@ const STATUS_LABEL: Record<BookingStatus, string> = {
   cancelled: 'Cancelled',
 }
 
-// Platform-wide figures computed across two local preview datasets — the
-// Renter's booking history (src/features/renter/mockBookings.ts) and the
-// Rentor's booking inbox (src/features/rentor/rentorBookingStore.ts) — since
-// there's no single Firestore `bookings` collection yet (PLAN.md section 3).
-// Phase 9 replaces this with a real aggregation query/Cloud Function.
 export function AnalyticsPanel() {
-  const platformBillboards = usePlatformBillboardsStore((s) => s.billboards)
-  const users = useUserStore((s) => s.users)
-  const rentorRequests = useRentorBookingStore((s) => s.requests)
-
-  const allBookings: Booking[] = [...MOCK_BOOKINGS, ...rentorRequests]
+  const formatPrice = useFormatPrice()
+  const { data: billboardsData } = useAdminBillboards()
+  const { data: usersData } = useAllUsers()
+  const { data: bookingsData } = useAllBookings()
+  const platformBillboards = billboardsData ?? []
+  const users = usersData ?? []
+  const allBookings = bookingsData ?? []
 
   const totalRevenue = allBookings
     .filter((b) => REVENUE_STATUSES.has(b.status))
@@ -57,7 +54,7 @@ export function AnalyticsPanel() {
             Revenue
           </span>
           <p className="mt-1 font-display text-2xl font-semibold text-accent">
-            ${totalRevenue.toLocaleString()}
+            {formatPrice(totalRevenue)}
           </p>
         </Card>
         <Card className="p-4">

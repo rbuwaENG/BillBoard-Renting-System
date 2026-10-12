@@ -1,13 +1,18 @@
 import { Pencil, Plus, Power, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Badge, BillboardMark, Button, Card } from '@/components'
+import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { cn } from '@/lib/utils'
 import { BillboardFormDialog } from './BillboardFormDialog'
 import {
-  useRentorBillboardStore,
+  useCreateBillboard,
+  useDeleteBillboard,
+  useRentorBillboards,
+  useSetBillboardStatus,
+  useUpdateBillboard,
   type RentorBillboard,
   type RentorBillboardInput,
-} from './rentorBillboardStore'
+} from './useRentorBillboards'
 
 const STATUS_CLASSES: Record<string, string> = {
   active: 'border-brand-success/40 text-brand-success',
@@ -16,11 +21,13 @@ const STATUS_CLASSES: Record<string, string> = {
 }
 
 export function MyBillboardsPanel() {
-  const billboards = useRentorBillboardStore((s) => s.billboards)
-  const addBillboard = useRentorBillboardStore((s) => s.addBillboard)
-  const updateBillboard = useRentorBillboardStore((s) => s.updateBillboard)
-  const setStatus = useRentorBillboardStore((s) => s.setStatus)
-  const deleteBillboard = useRentorBillboardStore((s) => s.deleteBillboard)
+  const formatPrice = useFormatPrice()
+  const { data: billboardsData, isLoading } = useRentorBillboards()
+  const billboards = billboardsData ?? []
+  const createBillboard = useCreateBillboard()
+  const updateBillboard = useUpdateBillboard()
+  const setStatus = useSetBillboardStatus()
+  const deleteBillboard = useDeleteBillboard()
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<RentorBillboard | null>(null)
@@ -36,8 +43,8 @@ export function MyBillboardsPanel() {
   }
 
   function handleSubmit(input: RentorBillboardInput) {
-    if (editing) updateBillboard(editing.id, input)
-    else addBillboard(input)
+    if (editing) updateBillboard.mutate({ id: editing.id, input })
+    else createBillboard.mutate(input)
   }
 
   return (
@@ -53,7 +60,7 @@ export function MyBillboardsPanel() {
       </div>
 
       <div className="mt-4 space-y-3">
-        {billboards.length === 0 && (
+        {!isLoading && billboards.length === 0 && (
           <p className="py-10 text-center text-sm text-ink/40 dark:text-paper/40">
             No billboards yet — add your first listing to start receiving
             bookings.
@@ -81,7 +88,7 @@ export function MyBillboardsPanel() {
             </div>
 
             <span className="shrink-0 font-mono text-sm font-semibold text-accent">
-              ${b.pricePerDay}
+              {formatPrice(b.pricePerDay)}
               <span className="text-ink/40 dark:text-paper/40">/day</span>
             </span>
 
@@ -94,7 +101,10 @@ export function MyBillboardsPanel() {
                 variant="secondary"
                 title={b.status === 'active' ? 'Deactivate' : 'Activate'}
                 onClick={() =>
-                  setStatus(b.id, b.status === 'active' ? 'inactive' : 'active')
+                  setStatus.mutate({
+                    id: b.id,
+                    status: b.status === 'active' ? 'inactive' : 'active',
+                  })
                 }
               >
                 <Power className="size-3.5" />
@@ -102,7 +112,7 @@ export function MyBillboardsPanel() {
               <Button
                 size="sm"
                 variant="danger"
-                onClick={() => deleteBillboard(b.id)}
+                onClick={() => deleteBillboard.mutate(b.id)}
               >
                 <Trash2 className="size-3.5" />
               </Button>

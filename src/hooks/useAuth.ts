@@ -1,50 +1,79 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import type { UserProfile, UserRole } from '@/types'
+import { supabase } from '@/lib/supabase'
+import type { UserProfile } from '@/types'
 
 interface AuthState {
   user: UserProfile | null
   isLoading: boolean
-  setUser: (user: UserProfile | null) => void
-  mockLogin: (role: UserRole, displayName?: string) => void
   updateProfile: (
     patch: Partial<Pick<UserProfile, 'displayName' | 'phone' | 'photoURL'>>,
-  ) => void
+  ) => Promise<void>
+  signOut: () => Promise<void>
 }
 
-const MOCK_DISPLAY_NAMES: Record<UserRole, string> = {
-  renter: 'Dev Renter',
-  rentor: 'Dev Rentor',
-  admin: 'Dev Admin',
+function toUserProfile(row: {
+  id: string
+  display_name: string
+  email: string
+  phone: string | null
+  photo_url: string | null
+  role: UserProfile['role']
+  status: UserProfile['status']
+  created_at: string
+}): UserProfile {
+  return {
+    uid: row.id,
+    displayName: row.display_name,
+    email: row.email,
+    phone: row.phone ?? undefined,
+    photoURL: row.photo_url ?? undefined,
+    role: row.role,
+    status: row.status,
+    createdAt: row.created_at,
+  }
 }
 
-// Stub session store for the scaffold phase. Phase 2 ("Auth & roles")
-// replaces `mockLogin` with a real `onAuthStateChanged` + Firestore profile
-// sync — `setUser`/`user`/`isLoading` stay the same shape so nothing else
-// (RoleGuard, RootLayout) needs to change when that lands.
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      user: null,
-      isLoading: false,
-      setUser: (user) => set({ user }),
-      mockLogin: (role, displayName) =>
-        set({
-          user: {
-            uid: `mock-${role}`,
-            displayName: displayName || MOCK_DISPLAY_NAMES[role],
-            email: `${role}@example.com`,
-            role,
-            status: 'active',
-            createdAt: new Date().toISOString(),
-          },
-        }),
-      updateProfile: (patch) =>
-        set((s) => (s.user ? { user: { ...s.user, ...patch } } : s)),
-    }),
-    { name: 'billboard-auth-preview' },
-  ),
-)
+async function fetchProfile(userId: string): Promise<UserProfile | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .single()
+  if (error || !data) return null
+  return toUserProfile(data)
+}
+
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  user: null,
+  isLoading: true,
+  updateProfile: async (patch) => {
+    const user = get().user
+    if (!user) return
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        display_name: patch.displayName ?? user.displayName,
+        phone: patch.phone,
+        photo_url: patch.photoURL,
+      })
+      .eq('id', user.uid)
+    if (!error) set({ user: { ...user, ...patch } })
+  },
+  signOut: async () => {
+    await supabase.auth.signOut()
+    set({ user: null })
+  },
+}))
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  if (session?.user) {
+    fetchProfile(session.user.id).then((profile) =>
+      useAuthStore.setState({ user: profile, isLoading: false }),
+    )
+  } else {
+    useAuthStore.setState({ user: null, isLoading: false })
+  }
+})
 
 export function useAuth() {
   const user = useAuthStore((s) => s.user)

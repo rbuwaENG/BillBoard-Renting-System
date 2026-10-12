@@ -1,24 +1,26 @@
 # Billboard Renting System
 
-A GIS-based billboard rental marketplace with a **React + Firebase** stack —
+A GIS-based billboard rental marketplace with a **React + Supabase** stack —
 Renter (advertiser), Rentor (billboard owner), and Admin roles. See
 [`PLAN.md`](./PLAN.md) for the full architecture and delivery-phase plan.
 
-This is currently **Phase 1 (project scaffold)**: tooling, routing, and stub
-pages are in place; no Firebase project is connected yet and no
-auth/billboard/booking logic has been implemented.
+The core marketplace flows run against a real Supabase backend: auth +
+roles, billboard browse, Rentor billboard CRUD, booking request + owner
+approve/reject, and the Admin panel (users/taxonomy/moderation/analytics).
+Payments, chat, campaigns, reviews, and notifications are still local/stub —
+see PLAN.md section 8 for what's left.
 
 ## Prerequisites
 
 - Node.js 20+
 - npm 10+
-- A Firebase project (for later phases — not required to run the scaffold)
+- A Supabase project (project settings -> API, for the URL + anon key)
 
 ## Setup
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in Firebase config once a project exists
+cp .env.example .env.local   # fill in Supabase URL + anon key
 npm run dev
 ```
 
@@ -36,23 +38,18 @@ The app runs at `http://localhost:5173`.
 
 ## Project layout
 
-See `PLAN.md` section 6 for the intended frontend/functions structure. In
-short: `src/app` (router, layout, route guards), `src/features/*` (one folder
-per role/domain area), `src/components` (shared UI), `src/hooks`, `src/lib`
-(Firebase client, query client, utils), `src/types` (Firestore schema types),
-and `functions/` (Cloud Functions, separate Node project).
+See `PLAN.md` section 6 for the intended frontend structure. In short:
+`src/app` (router, layout, route guards), `src/features/*` (one folder per
+role/domain area), `src/components` (shared UI), `src/hooks`, `src/lib`
+(Supabase client, query client, utils), `src/types` (schema types matching
+the Postgres tables), and `supabase/migrations/` (SQL schema + RLS history).
 
-## Firebase (follow-up phase)
+## Supabase
 
-No real Firebase project is wired up yet. Once one exists:
+The Postgres schema, RLS policies, and RPC functions (`request_booking`,
+`respond_to_booking`, `billboards_near`) are defined in
+`supabase/migrations/`. Storage buckets `billboard-images` (public read,
+owner-write) and `booking-creatives` (participant-scoped) hold uploads.
 
-1. `firebase login` and `firebase use --add` to point `.firebaserc` at the
-   real project id (replace the `your-firebase-project-id` placeholder).
-2. Fill in `.env.local` from `.env.example` with the web app's SDK config.
-3. `cd functions && npm install` to install the Cloud Functions dependencies.
-4. `firebase emulators:start` to run Auth/Firestore/Storage/Functions
-   locally against `firestore.rules` / `storage.rules`.
-
-`firestore.rules` and `storage.rules` are currently deny-by-default
-skeletons — see the TODO comments in each file and PLAN.md section 4 for the
-real rules to implement alongside each feature phase.
+Admin accounts are not self-service — promote a `profiles.role` to `'admin'`
+via SQL after that user has signed up normally as a renter/rentor.

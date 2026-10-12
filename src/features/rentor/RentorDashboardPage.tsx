@@ -3,13 +3,14 @@ import { Tabs, type TabItem } from '@/components'
 import { BookingInboxPanel } from './BookingInboxPanel'
 import { EarningsPanel } from './EarningsPanel'
 import { MyBillboardsPanel } from './MyBillboardsPanel'
-import { useRentorBookingStore } from './rentorBookingStore'
+import { useOwnerBookings } from './useRentorBookings'
 
 export function RentorDashboardPage() {
   const [tab, setTab] = useState('billboards')
-  const pendingCount = useRentorBookingStore(
-    (s) => s.requests.filter((r) => r.status === 'pending_owner_review').length,
-  )
+  const { data } = useOwnerBookings()
+  const pendingCount = (data ?? []).filter(
+    (r) => r.status === 'pending_owner_review',
+  ).length
 
   const tabs = useMemo<TabItem[]>(
     () => [

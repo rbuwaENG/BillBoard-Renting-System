@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Tabs, type TabItem } from '@/components'
 import { AnalyticsPanel } from './AnalyticsPanel'
 import { ModerationPanel } from './ModerationPanel'
+import { SettingsPanel } from './SettingsPanel'
 import { TaxonomyPanel } from './TaxonomyPanel'
 import { UsersPanel } from './UsersPanel'
 
@@ -10,6 +11,7 @@ const TABS: TabItem[] = [
   { key: 'users', label: 'Users' },
   { key: 'moderation', label: 'Moderation' },
   { key: 'taxonomy', label: 'Taxonomy' },
+  { key: 'settings', label: 'Settings' },
 ]
 
 export function AdminDashboardPage() {
@@ -33,6 +35,7 @@ export function AdminDashboardPage() {
         {tab === 'users' && <UsersPanel />}
         {tab === 'moderation' && <ModerationPanel />}
         {tab === 'taxonomy' && <TaxonomyPanel />}
+        {tab === 'settings' && <SettingsPanel />}
       </div>
     </div>
   )

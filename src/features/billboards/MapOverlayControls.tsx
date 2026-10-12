@@ -2,12 +2,14 @@ import { FolderPlus, LocateFixed, Moon, SlidersHorizontal, Sun, X } from 'lucide
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
+import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { MapIconButton } from './MapIconButton'
-import { MOCK_BILLBOARDS } from './mockBillboards'
+import type { BillboardWithDetails } from './useBillboards'
 
 interface MapOverlayControlsProps {
+  billboards: BillboardWithDetails[]
   isDark: boolean
   onToggleTheme: () => void
   categories: string[]
@@ -57,9 +59,10 @@ function ChipButton({
   )
 }
 
-function CampaignControl() {
+function CampaignControl({ billboards }: { billboards: BillboardWithDetails[] }) {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const formatPrice = useFormatPrice()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -69,7 +72,7 @@ function CampaignControl() {
   const createCampaign = useCampaignStore((s) => s.createCampaign)
 
   const draftBillboards = draftIds
-    .map((id) => MOCK_BILLBOARDS.find((b) => b.id === id))
+    .map((id) => billboards.find((b) => b.id === id))
     .filter((b): b is NonNullable<typeof b> => Boolean(b))
 
   const days =
@@ -175,7 +178,7 @@ function CampaignControl() {
             </div>
             {days > 0 && draftBillboards.length > 0 && (
               <p className="text-right font-mono text-xs text-accent">
-                Est. total ${total.toLocaleString()}
+                Est. total {formatPrice(total)}
               </p>
             )}
             <button
@@ -199,6 +202,7 @@ function CampaignControl() {
 }
 
 export function MapOverlayControls({
+  billboards,
   isDark,
   onToggleTheme,
   categories,
@@ -224,6 +228,7 @@ export function MapOverlayControls({
 }: MapOverlayControlsProps) {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const formatPrice = useFormatPrice()
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [nearMeOpen, setNearMeOpen] = useState(false)
   const [priceMin, priceCeil] = priceBounds
@@ -302,7 +307,7 @@ export function MapOverlayControls({
                   Price
                 </span>
                 <span className="font-mono text-xs font-semibold text-accent">
-                  Up to ${priceMax}/day
+                  Up to {formatPrice(priceMax)}/day
                 </span>
               </div>
               <input
@@ -331,7 +336,7 @@ export function MapOverlayControls({
         )}
       </div>
 
-      <CampaignControl />
+      <CampaignControl billboards={billboards} />
 
       {renterControl}
 

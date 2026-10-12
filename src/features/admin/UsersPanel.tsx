@@ -1,12 +1,13 @@
 import { Badge, Button, Card } from '@/components'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
-import { useUserStore } from './userStore'
+import { useAllUsers, useToggleUserStatus } from './useUsers'
 
 export function UsersPanel() {
   const { user: currentUser } = useAuth()
-  const users = useUserStore((s) => s.users)
-  const toggleStatus = useUserStore((s) => s.toggleStatus)
+  const { data } = useAllUsers()
+  const users = data ?? []
+  const toggleStatus = useToggleUserStatus()
 
   return (
     <Card ticks className="overflow-x-auto p-5">
@@ -54,7 +55,12 @@ export function UsersPanel() {
                     variant={u.status === 'active' ? 'danger' : 'secondary'}
                     disabled={isSelf}
                     title={isSelf ? "You can't suspend your own account" : undefined}
-                    onClick={() => toggleStatus(u.uid)}
+                    onClick={() =>
+                      toggleStatus.mutate({
+                        uid: u.uid,
+                        status: u.status === 'active' ? 'suspended' : 'active',
+                      })
+                    }
                   >
                     {u.status === 'active' ? 'Suspend' : 'Reinstate'}
                   </Button>

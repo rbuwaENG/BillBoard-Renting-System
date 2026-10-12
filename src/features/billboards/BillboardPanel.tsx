@@ -4,10 +4,10 @@ import { cn } from '@/lib/utils'
 import { BillboardCard } from './BillboardCard'
 import { MapIconButton } from './MapIconButton'
 import { LOCATE_STATUS_LABEL, type LocateStatus } from './locateStatus'
-import type { MockBillboard } from './mockBillboards'
+import type { BillboardWithDetails } from './useBillboards'
 
 interface BillboardPanelProps {
-  results: MockBillboard[]
+  results: BillboardWithDetails[]
   query: string
   onQueryChange: (query: string) => void
   selectedId: string | null

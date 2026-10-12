@@ -16,6 +16,8 @@ export interface UserProfile {
 
 export type BillboardStatus = 'active' | 'inactive' | 'flagged'
 
+export type TrafficLevel = 'light' | 'moderate' | 'heavy'
+
 export interface BillboardLocation {
   lat: number
   lng: number
@@ -34,6 +36,8 @@ export interface Billboard {
   pricePerDay: number
   images: string[]
   status: BillboardStatus
+  district?: string
+  trafficLevel?: TrafficLevel
   rating: { avg: number; count: number }
   createdAt: string
   updatedAt: string
@@ -60,6 +64,7 @@ export interface Booking {
   priceQuoted: number
   status: BookingStatus
   paymentId?: string
+  rejectionReason?: string
   createdAt: string
   updatedAt: string
   decisionAt?: string

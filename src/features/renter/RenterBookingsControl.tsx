@@ -1,13 +1,13 @@
 import { ClipboardList, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Badge, Tabs, type TabItem } from '@/components'
+import { Tabs, type TabItem } from '@/components'
 import { MapIconButton } from '@/features/billboards/MapIconButton'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
 import { useChatStore } from '@/features/chat/chatStore'
 import { BookingsTab } from './BookingsTab'
 import { CampaignsTab } from './CampaignsTab'
 import { MessagesTab } from './MessagesTab'
-import { MOCK_BOOKINGS } from './mockBookings'
+import { useMyBookings } from './useMyBookings'
 
 interface RenterBookingsControlProps {
   onSelectBillboard: (id: string) => void
@@ -24,6 +24,7 @@ export function RenterBookingsControl({
 }: RenterBookingsControlProps) {
   const [open, setOpen] = useState(true)
   const [tab, setTab] = useState('bookings')
+  const { data: myBookings } = useMyBookings()
   const draftCount = useCampaignStore((s) => s.draftIds.length)
   const threadCount = useChatStore(
     (s) => Object.values(s.messagesByBillboard).filter((m) => m.length > 0)
@@ -54,9 +55,9 @@ export function RenterBookingsControl({
         className="relative"
       >
         <ClipboardList className="size-4" />
-        {MOCK_BOOKINGS.length > 0 && (
+        {(myBookings ?? []).length > 0 && (
           <span className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-accent font-mono text-[9px] text-paper">
-            {MOCK_BOOKINGS.length}
+            {(myBookings ?? []).length}
           </span>
         )}
       </MapIconButton>
@@ -68,7 +69,6 @@ export function RenterBookingsControl({
               <h2 className="font-display text-xl font-semibold tracking-tight">
                 My activity
               </h2>
-              <Badge variant="accent">Preview data</Badge>
             </div>
             <button
               type="button"

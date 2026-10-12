@@ -10,9 +10,8 @@ function inputClass() {
   return 'w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-paper/20 dark:placeholder:text-paper/30'
 }
 
-// Phase 2 ("Auth & roles") replaces `updateProfile` with a real Firestore
-// `users/{uid}` write; email stays read-only here since it's Firebase
-// Auth-managed, not a plain profile field.
+// Email stays read-only here since it's Supabase Auth-managed, not a plain
+// profile field.
 export function ProfilePage() {
   const user = useAuthStore((s) => s.user)
   const updateProfile = useAuthStore((s) => s.updateProfile)
@@ -23,9 +22,9 @@ export function ProfilePage() {
 
   if (!user) return null
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    updateProfile({
+    await updateProfile({
       displayName: displayName.trim() || user!.displayName,
       phone: phone.trim() || undefined,
       photoURL: photoURL.trim() || undefined,

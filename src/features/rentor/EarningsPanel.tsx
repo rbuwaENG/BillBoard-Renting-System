@@ -1,7 +1,8 @@
 import { Card } from '@/components'
+import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { BookingStatusBadge } from '@/features/bookings'
 import type { BookingStatus } from '@/types'
-import { useRentorBookingStore } from './rentorBookingStore'
+import { useOwnerBookings } from './useRentorBookings'
 
 const EARNED_STATUSES = new Set<BookingStatus>(['confirmed', 'active', 'completed'])
 const PENDING_STATUSES = new Set<BookingStatus>(['payment_pending'])
@@ -14,7 +15,9 @@ function formatDateRange(start: string, end: string) {
 }
 
 export function EarningsPanel() {
-  const requests = useRentorBookingStore((s) => s.requests)
+  const formatPrice = useFormatPrice()
+  const { data } = useOwnerBookings()
+  const requests = data ?? []
 
   const earned = requests
     .filter((r) => EARNED_STATUSES.has(r.status))
@@ -34,7 +37,7 @@ export function EarningsPanel() {
             Total earned
           </span>
           <p className="mt-1 font-display text-2xl font-semibold text-accent">
-            ${earned.toLocaleString()}
+            {formatPrice(earned)}
           </p>
         </Card>
         <Card className="p-4">
@@ -42,7 +45,7 @@ export function EarningsPanel() {
             Pending payout
           </span>
           <p className="mt-1 font-display text-2xl font-semibold">
-            ${pending.toLocaleString()}
+            {formatPrice(pending)}
           </p>
         </Card>
         <Card className="p-4">
@@ -79,7 +82,7 @@ export function EarningsPanel() {
                 <div className="flex shrink-0 items-center gap-3">
                   <BookingStatusBadge status={r.status} />
                   <span className="font-mono font-semibold text-accent">
-                    ${r.priceQuoted.toLocaleString()}
+                    {formatPrice(r.priceQuoted)}
                   </span>
                 </div>
               </li>

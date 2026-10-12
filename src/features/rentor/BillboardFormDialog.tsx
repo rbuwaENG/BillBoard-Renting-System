@@ -1,10 +1,21 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { LocateFixed, X } from 'lucide-react'
-import { useEffect, useState, type FormEvent } from 'react'
+import { ExternalLink, LocateFixed, X } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Button } from '@/components'
-import { useTaxonomyStore } from '@/features/admin/taxonomyStore'
+import { useCategories, useSizes } from '@/features/admin/useTaxonomy'
+import { useCurrencySetting } from '@/features/admin/useCurrencySetting'
+import { useAuth } from '@/hooks/useAuth'
+import { lookupDistrict, trafficMapUrl } from '@/lib/geocode'
+import type { TrafficLevel } from '@/types'
 import { LocationPickerMap } from './LocationPickerMap'
-import type { RentorBillboard, RentorBillboardInput } from './rentorBillboardStore'
+import { uploadBillboardImages } from './useRentorBillboards'
+import type { RentorBillboard, RentorBillboardInput } from './useRentorBillboards'
+
+const TRAFFIC_LEVELS: { value: TrafficLevel; label: string }[] = [
+  { value: 'light', label: 'Light' },
+  { value: 'moderate', label: 'Moderate' },
+  { value: 'heavy', label: 'Heavy' },
+]
 
 interface BillboardFormDialogProps {
   open: boolean
@@ -13,23 +24,24 @@ interface BillboardFormDialogProps {
   onSubmit: (input: RentorBillboardInput) => void
 }
 
-// Default map center for a brand-new listing — Colombo, matching the seed
-// billboards in rentorBillboardStore.ts — until the owner clicks the map or
-// "Use my location" to place the actual pin.
+// Default map center for a brand-new listing — Colombo — until the owner
+// clicks the map or "Use my location" to place the actual pin.
 const DEFAULT_LAT = 6.9271
 const DEFAULT_LNG = 79.8612
 
 const EMPTY: RentorBillboardInput = {
   title: '',
   description: '',
-  category: '',
-  size: '',
+  categoryId: '',
+  sizeId: '',
   address: '',
   city: '',
   lat: DEFAULT_LAT,
   lng: DEFAULT_LNG,
   pricePerDay: 0,
   images: [],
+  district: null,
+  trafficLevel: null,
 }
 
 function fieldLabelClass() {
@@ -46,34 +58,63 @@ export function BillboardFormDialog({
   editing,
   onSubmit,
 }: BillboardFormDialogProps) {
-  const categories = useTaxonomyStore((s) => s.categories)
-  const sizes = useTaxonomyStore((s) => s.sizes)
+  const { user } = useAuth()
+  const { data: categories } = useCategories()
+  const { data: sizes } = useSizes()
+  const { data: currencySetting } = useCurrencySetting()
   const [form, setForm] = useState<RentorBillboardInput>(EMPTY)
+  const [newFiles, setNewFiles] = useState<File[]>([])
   const [recenterSignal, setRecenterSignal] = useState(0)
+  const [uploading, setUploading] = useState(false)
+  const [districtStatus, setDistrictStatus] = useState<
+    'idle' | 'loading' | 'done'
+  >('idle')
+  const districtLookupId = useRef(0)
 
   useEffect(() => {
     if (!open) return
+    setNewFiles([])
     if (editing) {
       setForm({
         title: editing.title,
         description: editing.description,
-        category: editing.category,
-        size: editing.size,
+        categoryId: editing.categoryId,
+        sizeId: editing.sizeId,
         address: editing.location.address,
         city: editing.location.city,
         lat: editing.location.lat,
         lng: editing.location.lng,
         pricePerDay: editing.pricePerDay,
         images: editing.images,
+        district: editing.district,
+        trafficLevel: editing.trafficLevel,
       })
+      setDistrictStatus(editing.district ? 'done' : 'idle')
     } else {
       setForm({
         ...EMPTY,
-        category: categories[0]?.name ?? '',
-        size: sizes[0]?.label ?? '',
+        categoryId: categories?.[0]?.id ?? '',
+        sizeId: sizes?.[0]?.id ?? '',
       })
+      setDistrictStatus('idle')
     }
   }, [open, editing, categories, sizes])
+
+  // Auto-detect the district whenever the pin settles on a new spot, debounced
+  // so dragging the marker doesn't fire a lookup per pixel. Free, no API key
+  // (OpenStreetMap Nominatim) — see src/lib/geocode.ts.
+  useEffect(() => {
+    if (!open) return
+    const requestId = ++districtLookupId.current
+    setDistrictStatus('loading')
+    const timeout = setTimeout(async () => {
+      const district = await lookupDistrict(form.lat, form.lng)
+      if (districtLookupId.current !== requestId) return
+      setForm((f) => ({ ...f, district }))
+      setDistrictStatus('done')
+    }, 600)
+    return () => clearTimeout(timeout)
+  }, [open, form.lat, form.lng])
 
   function handlePick(lat: number, lng: number) {
     setForm((f) => ({ ...f, lat, lng }))
@@ -91,10 +132,23 @@ export function BillboardFormDialog({
     })
   }
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!form.title.trim() || !form.city.trim() || !form.pricePerDay) return
-    onSubmit(form)
+    if (!form.categoryId || !form.sizeId || !user) return
+
+    let images = form.images
+    if (newFiles.length > 0) {
+      setUploading(true)
+      try {
+        const uploaded = await uploadBillboardImages(newFiles, user.uid)
+        images = [...form.images, ...uploaded]
+      } finally {
+        setUploading(false)
+      }
+    }
+
+    onSubmit({ ...form, images })
     onOpenChange(false)
   }
 
@@ -152,14 +206,14 @@ export function BillboardFormDialog({
                 <label className="block">
                   <span className={fieldLabelClass()}>Category</span>
                   <select
-                    value={form.category}
+                    value={form.categoryId}
                     onChange={(e) =>
-                      setForm((f) => ({ ...f, category: e.target.value }))
+                      setForm((f) => ({ ...f, categoryId: e.target.value }))
                     }
                     className={inputClass()}
                   >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.name}>
+                    {(categories ?? []).map((c) => (
+                      <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
                     ))}
@@ -168,12 +222,14 @@ export function BillboardFormDialog({
                 <label className="block">
                   <span className={fieldLabelClass()}>Size</span>
                   <select
-                    value={form.size}
-                    onChange={(e) => setForm((f) => ({ ...f, size: e.target.value }))}
+                    value={form.sizeId}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, sizeId: e.target.value }))
+                    }
                     className={inputClass()}
                   >
-                    {sizes.map((sz) => (
-                      <option key={sz.id} value={sz.label}>
+                    {(sizes ?? []).map((sz) => (
+                      <option key={sz.id} value={sz.id}>
                         {sz.label}
                       </option>
                     ))}
@@ -228,10 +284,52 @@ export function BillboardFormDialog({
                   Click the map or drag the pin to place this billboard ·{' '}
                   {form.lat.toFixed(5)}, {form.lng.toFixed(5)}
                 </p>
+                <p className="mt-1 font-mono text-[11px] text-ink/50 dark:text-paper/50">
+                  District:{' '}
+                  {districtStatus === 'loading'
+                    ? 'Detecting…'
+                    : (form.district ?? 'Not detected — you can still publish')}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <label className="block">
+                  <span className={fieldLabelClass()}>Traffic level</span>
+                  <select
+                    value={form.trafficLevel ?? ''}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        trafficLevel: (e.target.value || null) as TrafficLevel | null,
+                      }))
+                    }
+                    className={inputClass()}
+                  >
+                    <option value="">Not set</option>
+                    {TRAFFIC_LEVELS.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex items-end pb-2">
+                  <a
+                    href={trafficMapUrl(form.lat, form.lng)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 font-mono text-[11px] tracking-widest text-accent uppercase hover:underline"
+                  >
+                    <ExternalLink className="size-3" />
+                    Check live traffic on Google Maps
+                  </a>
+                </div>
               </div>
 
               <label className="block">
-                <span className={fieldLabelClass()}>Price per day (USD)</span>
+                <span className={fieldLabelClass()}>
+                  Price per day ({currencySetting?.currency ?? 'LKR'})
+                </span>
                 <input
                   required
                   type="number"
@@ -244,11 +342,32 @@ export function BillboardFormDialog({
                   className={inputClass()}
                 />
               </label>
+
+              <label className="block">
+                <span className={fieldLabelClass()}>Images</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => setNewFiles(Array.from(e.target.files ?? []))}
+                  className="w-full text-xs text-ink/60 dark:text-paper/60"
+                />
+                {form.images.length > 0 && (
+                  <p className="mt-1 font-mono text-[11px] text-ink/50 dark:text-paper/50">
+                    {form.images.length} existing image
+                    {form.images.length !== 1 ? 's' : ''}
+                  </p>
+                )}
+              </label>
             </div>
 
             <div className="border-t border-ink/10 p-5 dark:border-paper/15">
-              <Button type="submit" className="w-full">
-                {editing ? 'Save changes' : 'Add billboard'}
+              <Button type="submit" disabled={uploading} className="w-full">
+                {uploading
+                  ? 'Uploading images…'
+                  : editing
+                    ? 'Save changes'
+                    : 'Add billboard'}
               </Button>
             </div>
           </form>

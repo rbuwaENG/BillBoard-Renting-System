@@ -1,15 +1,18 @@
 import { MessageCircle } from 'lucide-react'
 import { useState } from 'react'
 import { BillboardMark, Button, Card } from '@/components'
-import { MOCK_BILLBOARDS } from '@/features/billboards/mockBillboards'
+import { useBillboards } from '@/features/billboards/useBillboards'
 import { ChatPanel } from '@/features/chat/ChatPanel'
 import { useChatStore } from '@/features/chat/chatStore'
-import { MOCK_BOOKINGS } from './mockBookings'
+import { useMyBookings } from './useMyBookings'
 
 // A renter-wide inbox over the same per-billboard chat store the billboard
 // detail dialog writes to (src/features/chat/chatStore.ts) — previously the
 // only way to reach a conversation was reopening that billboard's dialog.
 export function MessagesTab() {
+  const { data: billboardsData } = useBillboards()
+  const billboards = billboardsData ?? []
+  const { data: myBookings } = useMyBookings()
   const messagesByBillboard = useChatStore((s) => s.messagesByBillboard)
   const [activeBillboardId, setActiveBillboardId] = useState<string | null>(
     null,
@@ -18,11 +21,13 @@ export function MessagesTab() {
   const threadIds = Object.keys(messagesByBillboard).filter(
     (id) => messagesByBillboard[id].length > 0,
   )
-  const bookedIds = Array.from(new Set(MOCK_BOOKINGS.map((b) => b.billboardId)))
+  const bookedIds = Array.from(
+    new Set((myBookings ?? []).map((b) => b.billboardId)),
+  )
   const startableIds = bookedIds.filter((id) => !threadIds.includes(id))
 
   const activeBillboard = activeBillboardId
-    ? MOCK_BILLBOARDS.find((b) => b.id === activeBillboardId)
+    ? billboards.find((b) => b.id === activeBillboardId)
     : null
 
   if (activeBillboard) {
@@ -49,7 +54,7 @@ export function MessagesTab() {
         ) : (
           <div className="mt-3 space-y-2">
             {threadIds.map((id) => {
-              const billboard = MOCK_BILLBOARDS.find((b) => b.id === id)
+              const billboard = billboards.find((b) => b.id === id)
               if (!billboard) return null
               const thread = messagesByBillboard[id]
               const last = thread[thread.length - 1]
@@ -95,7 +100,7 @@ export function MessagesTab() {
         ) : (
           <div className="mt-3 space-y-2">
             {startableIds.map((id) => {
-              const billboard = MOCK_BILLBOARDS.find((b) => b.id === id)
+              const billboard = billboards.find((b) => b.id === id)
               if (!billboard) return null
               return (
                 <Card

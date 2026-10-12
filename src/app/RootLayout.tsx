@@ -19,7 +19,7 @@ const NAV_LINKS: NavLinkDef[] = [
 
 export function RootLayout() {
   const { user, role } = useAuth()
-  const setUser = useAuthStore((s) => s.setUser)
+  const signOut = useAuthStore((s) => s.signOut)
 
   const visibleLinks = NAV_LINKS.filter(
     (link) => !link.roles || (role && link.roles.includes(role)),
@@ -67,7 +67,7 @@ export function RootLayout() {
               >
                 {user.displayName} · {user.role}
               </NavLink>
-              <Button size="sm" variant="secondary" onClick={() => setUser(null)}>
+              <Button size="sm" variant="secondary" onClick={() => signOut()}>
                 Log out
               </Button>
             </div>

@@ -1,12 +1,12 @@
 # Billboard Renting System — Project Plan
 
-Reference inspiration: [sapta28/QGIS_Backend_Project](https://github.com/sapta28/QGIS_Backend_Project) (Laravel + React + GIS billboard rental app). This project reimplements the same domain — GIS-based billboard rental marketplace — on a **React + Firebase** stack instead of Laravel, and introduces a dedicated **Rentor** (billboard owner) role alongside Renter and Admin.
+Reference inspiration: [sapta28/QGIS_Backend_Project](https://github.com/sapta28/QGIS_Backend_Project) (Laravel + React + GIS billboard rental app). This project reimplements the same domain — GIS-based billboard rental marketplace — on a **React + Supabase** stack instead of Laravel, and introduces a dedicated **Rentor** (billboard owner) role alongside Renter and Admin.
 
 ---
 
 ## 1. Roles & Marketplace Model
 
-Three roles, stored as a `role` field on the user profile + mirrored into a Firebase Auth **custom claim** (for security rules and callable-function checks):
+Three roles, stored as a `role` column on the `profiles` table (Postgres), checked in Row Level Security policies and RPC functions via a `current_role()` helper (no separate auth claim — the table is the single source of truth):
 
 | Role | Who | Core capabilities |
 |---|---|---|
@@ -33,98 +33,96 @@ Three roles, stored as a `role` field on the user profile + mirrored into a Fire
 - **React Hook Form + Zod** — form state & validation
 - **shadcn/ui or Radix primitives** — accessible component base
 
-### Backend (Firebase)
-- **Firebase Auth** — email/password + Google sign-in; custom claims for `role`
-- **Cloud Firestore** — primary database
-- **Cloud Storage for Firebase** — billboard images, booking creative/design uploads
-- **Cloud Functions (2nd gen, TypeScript)** — privileged writes, Stripe integration, notifications, triggers
-- **Firebase Hosting** — SPA hosting + CDN
-- **Firebase App Check** — abuse protection on Functions/Firestore
-- **Stripe** (via Cloud Functions + Webhooks) — payment processing (Firebase has no native payments)
-- **Firebase Cloud Messaging (FCM)** *(optional, phase 8)* — push notifications for booking status changes
+### Backend (Supabase)
+- **Supabase Auth** — email/password (+ Google sign-in later); role lives in the `profiles` table, set on signup via a `handle_new_user` trigger
+- **Postgres (Supabase)** — primary database, with **PostGIS** for native geo queries (radius search via `ST_DWithin`, no geohash workaround needed)
+- **Supabase Storage** — billboard images, booking creative/design uploads
+- **Postgres RPC functions (`security definer`)** — privileged writes/state transitions: `request_booking`, `respond_to_booking`
+- **Row Level Security (RLS)** — per-table policies enforce the security model directly in Postgres
+- **Supabase Edge Functions** *(future, payments phase)* — Stripe Checkout session creation + webhook handling
+- **Stripe** (via Edge Functions + Webhooks) — payment processing
+- **Supabase Realtime** *(optional, notifications/chat phase)* — push updates on booking status change / messages
 
 ### Tooling
 - **Vitest + React Testing Library** — unit/component tests
-- **Firebase Emulator Suite** — local Firestore/Auth/Functions/Storage + rules testing
+- **Supabase CLI / local dev stack** *(optional)* — local Postgres/Auth/Storage for offline development
 - **ESLint + Prettier** — lint/format
-- **GitHub Actions** — CI (lint, test, build, rules test) + CD (deploy to Firebase Hosting/Functions on merge to `main`)
+- **GitHub Actions** — CI (lint, test, build) + CD (deploy static build to hosting of choice on merge to `main`)
 
 ---
 
-## 3. Data Model (Firestore)
+## 3. Data Model (Postgres, Supabase project `BBMS`)
 
 ```
-users/{uid}
-  displayName, email, phone, photoURL
+profiles (id = auth.users.id)
+  display_name, email, phone, photo_url
   role: 'renter' | 'rentor' | 'admin'
   status: 'active' | 'suspended'
-  createdAt
+  created_at
 
-billboards/{billboardId}
-  ownerId: uid (Rentor)
+billboards
+  owner_id -> profiles.id (Rentor)
   title, description
-  category: ref -> categories/{id}
-  size: ref -> sizes/{id}          // e.g. 4x8, 10x20
-  location: { lat, lng, address, city }
-  pricePerDay: number
-  images: string[]                  // Storage paths
+  category_id -> categories.id
+  size_id -> sizes.id              // e.g. 4x8, 10x20
+  lat, lng, geom (geography(Point,4326), generated from lat/lng), address, city
+  price_per_day: numeric
+  images: text[]                    // Storage paths
   status: 'active' | 'inactive' | 'flagged'   // Rentor/Admin controlled, no approval gate
-  availability: subcollection availability/{dateRangeId} OR calendar map
-  rating: { avg, count }
-  createdAt, updatedAt
+  rating_avg, rating_count
+  created_at, updated_at
 
-  bookings (subcollection or top-level, see below)
-
-bookings/{bookingId}
-  billboardId, ownerId (denormalized), renterId
-  startDate, endDate
-  creativeUrl: string                // uploaded design/artwork
-  priceQuoted: number
+bookings
+  billboard_id, owner_id (denormalized), renter_id
+  start_date, end_date
+  creative_url: text                 // uploaded design/artwork
+  price_quoted: numeric
   status: 'pending_owner_review' | 'approved' | 'rejected'
           | 'payment_pending' | 'confirmed' | 'active'
           | 'completed' | 'cancelled'
-  paymentId: ref -> payments/{id}
-  createdAt, updatedAt, decisionAt
+  payment_id -> payments.id
+  rejection_reason
+  created_at, updated_at, decision_at
 
-payments/{paymentId}
-  bookingId, renterId, ownerId
-  stripePaymentIntentId
+payments
+  booking_id, renter_id, owner_id
+  stripe_payment_intent_id
   amount, currency, status: 'pending' | 'succeeded' | 'failed' | 'refunded'
-  createdAt
+  created_at
 
-categories/{id}        // Admin-managed
+categories        // Admin-managed
   name, description
 
-sizes/{id}             // Admin-managed
+sizes             // Admin-managed
   label, width, height
 
-reviews/{reviewId}
-  bookingId, billboardId, renterId, rating, comment, createdAt
+reviews
+  booking_id, billboard_id, renter_id, rating, comment, created_at
 
-notifications/{uid}/items/{id}
-  type, message, read, refId, createdAt
+notifications
+  user_id, type, message, read, ref_id, created_at
 ```
 
-**Indexes**: composite indexes on `billboards(status, category, location geohash)`, `bookings(ownerId, status)`, `bookings(renterId, status)`.
+**Indexes**: GIST index on `billboards.geom`; btree on `billboards(status, category_id)`, `bookings(owner_id, status)`, `bookings(renter_id, status)`.
 
-**Geo queries**: store a geohash field on `billboards` (e.g. via `geofire-common`) for radius/bounding-box map queries — Firestore has no native geo-query.
+**Geo queries**: `billboards.geom` is a generated `geography(Point,4326)` column; radius search uses the `billboards_near(lat, lng, radius_km)` RPC (`ST_DWithin`) — native PostGIS, no geohash workaround needed.
 
 ---
 
 ## 4. Security Model
 
-- **Firestore Security Rules**: role-based, e.g.
-  - `billboards`: create/update/delete only if `request.auth.token.role == 'rentor' && resource.data.ownerId == request.auth.uid`; public `read` for `status == 'active'`.
-  - `bookings`: create by any authenticated Renter; `update` (status transitions) restricted — actual approve/reject/payment transitions happen via **Cloud Functions callable** (not direct client writes) so business rules (ownership check, valid state transition, payment verification) are enforced server-side.
-  - `users`: a user can read/update only their own profile; role field is **not** client-writable (only settable via an Admin-invoked Cloud Function or Firebase Console/Admin SDK).
-- **Custom claims** set via Cloud Function on role assignment (e.g. `setUserRole` callable, Admin-only), synced to Firestore `users/{uid}.role` for querying.
-- **Storage Rules**: billboard images writable only by the owning Rentor; booking creatives writable only by the requesting Renter; both public-readable if the parent doc is public.
-- **Cloud Functions** are the single source of truth for state transitions:
-  - `requestBooking` (callable) — validates dates/availability, creates booking as `pending_owner_review`.
-  - `respondToBooking` (callable, Rentor-only, ownership-checked) — approve → `approved`/`payment_pending`, or reject → `rejected`.
-  - `createCheckoutSession` (callable) — Renter pays after approval; creates Stripe session.
-  - `stripeWebhook` (HTTPS) — on `payment_intent.succeeded`, marks booking `confirmed` and payment `succeeded`.
-  - `onBookingStatusChange` (Firestore trigger) — writes a notification doc for the affected user(s).
+- **Row Level Security (RLS)**, enabled per table, e.g.:
+  - `billboards`: insert/update/delete only if `current_role() = 'rentor' and owner_id = auth.uid()`; public `select` for `status = 'active'` (owner/admin can also select their own regardless of status).
+  - `bookings`: `select` restricted to participants (`renter_id`/`owner_id`) or admin; **no direct insert/update policies** — approve/reject/create transitions happen via **`security definer` RPC functions** (not direct client writes) so business rules (ownership check, valid state transition) are enforced server-side.
+  - `profiles`: a user can read/update only their own row (admin can read all); `role`/`status` columns are **not** client-writable (reverted by a `before update` trigger unless the caller is admin).
+- **Role storage**: `role` lives only in `profiles.role` — no separate auth claim. RLS/RPCs check it via a `security definer` helper function `current_role()` to avoid self-referential RLS recursion. Role is set once at signup (via `handle_new_user` trigger reading `raw_user_meta_data`, limited to `renter`/`rentor`) and only changed afterward by direct admin SQL (no self-service admin signup).
+- **Storage policies**: billboard images writable only by the owning Rentor (path-prefixed by `owner_id`); booking creatives writable only by the requesting Renter; both readable per the same participant rules as above.
+- **RPC functions** are the single source of truth for state transitions:
+  - `request_booking` — validates the billboard is active and dates don't overlap an existing non-terminal booking, creates booking as `pending_owner_review`.
+  - `respond_to_booking` (Rentor-only, ownership-checked) — approve → `payment_pending`, or reject → `rejected` with `rejection_reason`.
+  - `create_checkout_session` *(future, payments phase)* — Renter pays after approval; creates Stripe session via an Edge Function.
+  - `stripe-webhook` *(future, Edge Function)* — on `payment_intent.succeeded`, marks booking `confirmed` and payment `succeeded`.
+  - `on_booking_status_change` *(future, trigger)* — writes a notification row for the affected user(s).
 
 ---
 
@@ -156,45 +154,36 @@ src/
 │   ├── bookings/              # shared booking components (status badge, timeline)
 │   └── payments/              # Stripe checkout redirect/embed, payment status
 ├── hooks/                     # useAuth, useBillboards, useBookings (TanStack Query hooks)
-├── lib/                       # firebase.ts, queryClient.ts, geohash.ts
-├── types/                     # shared TS types/interfaces mirroring Firestore schema
+├── lib/                       # supabase.ts, queryClient.ts, geohash.ts
+├── types/                     # shared TS types/interfaces mirroring the Postgres schema
 └── main.tsx
 
-functions/
-└── src/
-    ├── https/                 # requestBooking, respondToBooking, createCheckoutSession, setUserRole
-    ├── webhooks/              # stripeWebhook
-    ├── triggers/              # onBookingStatusChange, onBillboardWrite (denormalization)
-    └── index.ts
-
-firestore.rules
-firestore.indexes.json
-storage.rules
-firebase.json
-.firebaserc
+supabase/
+└── migrations/                # schema, RLS policies, RPC functions (request_booking, respond_to_booking, billboards_near)
 ```
 
 ---
 
 ## 7. Delivery Phases
 
-1. **Project scaffold** — Vite React-TS app, Firebase project, Hosting/Firestore/Storage/Functions init, emulator suite wired up, CI skeleton.
-2. **Auth & roles** — signup/login, role selection at signup (Renter/Rentor), `setUserRole` admin callable, route guards per role.
+1. **Project scaffold** — Vite React-TS app, Supabase project, schema/RLS/Storage init, CI skeleton. ✅ done (migrated from an earlier Firebase scaffold).
+2. **Auth & roles** — signup/login, role selection at signup (Renter/Rentor), admin role set via direct SQL, route guards per role. ✅ done.
 3. **Rentor: billboard CRUD** — add/edit/deactivate billboard with map-picker for lat/lng, image upload, pricing/size/category selection.
-4. **Public browse & map** — map + list view with filters (category, size, price, location radius), billboard detail page.
-5. **Booking flow (Renter)** — booking wizard (dates, creative upload), `requestBooking` callable, status tracking page.
-6. **Rentor booking inbox** — pending requests list, `respondToBooking` (approve/reject) with reason.
-7. **Payments** — Stripe Checkout session on approval, webhook confirms booking, payment history for both sides.
-8. **Notifications** — in-app notification feed via Firestore trigger; optional FCM push.
-9. **Admin panel** — categories/sizes management, user management (suspend), billboard moderation (flag/unpublish), platform analytics dashboard.
-10. **Reviews & polish** — post-completion review/rating, empty/error/loading states, accessibility pass.
-11. **Testing & hardening** — Firestore rules unit tests via emulator, Vitest coverage on hooks/components, Functions tests.
-12. **CI/CD & deploy** — GitHub Actions pipeline (lint/test/build → deploy Hosting + Functions on `main`), production Firebase project config, Stripe live keys.
+4. **Public browse & map** — map + list view with filters (category, size, price, location radius via `billboards_near`), billboard detail page. ✅ done.
+5. **Booking flow (Renter)** — request-booking dialog (dates, optional creative URL), `request_booking` RPC, status tracking in "My bookings". ✅ done.
+6. **Rentor booking inbox** — pending requests list, `respond_to_booking` RPC (approve/reject) with reason. ✅ done.
+7. **Payments** — Stripe Checkout session on approval, webhook confirms booking, payment history for both sides. *(not started — `payments` table exists, no Edge Functions/UI yet)*
+8. **Notifications** — in-app notification feed via a Postgres trigger + Supabase Realtime. *(not started — `notifications` table exists, unused)*
+9. **Admin panel** — categories/sizes management, user management (suspend), billboard moderation (flag/unpublish), platform analytics dashboard. ✅ done.
+10. **Reviews & polish** — post-completion review/rating, empty/error/loading states, accessibility pass. *(not started — `reviews` table exists, no submission UI)*
+11. **Testing & hardening** — RLS policy tests, Vitest coverage on hooks/components. *(not started beyond the original smoke test)*
+12. **CI/CD & deploy** — GitHub Actions pipeline (lint/test/build → deploy static build), Stripe live keys for production.
 
 ---
 
 ## 8. Open Items to Revisit Later
 
 - Payout mechanism to Rentors (manual admin payout vs. Stripe Connect) — start manual, note Stripe Connect as a future enhancement.
-- Availability model: simple date-range overlap check vs. full calendar subcollection — start simple (overlap check on `bookings` query), upgrade if needed.
-- Geo search: `geofire-common` bounding-box + client-side distance filter is sufficient at billboard-marketplace scale; revisit only if the catalog grows very large.
+- Availability model: simple date-range overlap check vs. full calendar table — currently a simple overlap check inside `request_booking`, upgrade if needed.
+- Chat (`src/features/chat/*`) and campaigns (`src/features/campaigns/*`) are still local-only simulations with no backend table — revisit if/when those become real features.
+- Image upload for booking creatives (currently a plain URL field in the booking request dialog) could move to the `booking-creatives` Storage bucket like billboard images already do.

@@ -1,7 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useState } from 'react'
+import { Controller, useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
-import { Badge, BillboardMark, Button } from '@/components'
-import { useAuthStore } from '@/hooks/useAuth'
+import { z } from 'zod'
+import { BillboardMark, Button } from '@/components'
+import { supabase } from '@/lib/supabase'
 import type { UserRole } from '@/types'
 
 const ROLE_HOME: Record<UserRole, string> = {
@@ -15,20 +18,69 @@ const SIGNUP_ROLES: { role: UserRole; label: string; hint: string }[] = [
   { role: 'rentor', label: 'Rentor', hint: 'List and manage your own billboards' },
 ]
 
-// Phase 2 replaces this with a real Firebase Auth createUserWithEmailAndPassword
-// + Firestore profile write. Admin accounts aren't self-service (PLAN.md
-// section 4: role is granted via an admin-only callable), so only
-// renter/rentor are offered here.
+const signupSchema = z.object({
+  name: z.string().min(1, 'Enter your name'),
+  email: z.string().email('Enter a valid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  role: z.enum(['renter', 'rentor']),
+})
+
+type SignupFormValues = z.infer<typeof signupSchema>
+
+// Admin accounts aren't self-service (PLAN.md section 4: role is granted by
+// direct admin SQL), so only renter/rentor are offered here.
 export function SignupPage() {
   const navigate = useNavigate()
-  const mockLogin = useAuthStore((s) => s.mockLogin)
-  const [name, setName] = useState('')
-  const [role, setRole] = useState<UserRole>('renter')
+  const [confirmationSent, setConfirmationSent] = useState(false)
+  const {
+    register,
+    control,
+    handleSubmit,
+    setError,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<SignupFormValues>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: { role: 'renter' },
+  })
+  const role = watch('role')
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    mockLogin(role, name.trim() || undefined)
-    navigate(ROLE_HOME[role])
+  async function onSubmit(values: SignupFormValues) {
+    const { data, error } = await supabase.auth.signUp({
+      email: values.email,
+      password: values.password,
+      options: {
+        data: { display_name: values.name, role: values.role },
+      },
+    })
+    if (error) {
+      setError('root', { message: error.message })
+      return
+    }
+
+    if (data.session) {
+      navigate(ROLE_HOME[values.role])
+    } else {
+      setConfirmationSent(true)
+    }
+  }
+
+  if (confirmationSent) {
+    return (
+      <div className="mx-auto flex min-h-[calc(100svh-4rem)] max-w-sm flex-col items-center justify-center px-4 text-center">
+        <BillboardMark className="size-8 text-accent" />
+        <h2 className="mt-4 font-display text-2xl font-semibold tracking-tight">
+          Check your email
+        </h2>
+        <p className="mt-2 text-sm text-ink/60 dark:text-paper/60">
+          We sent a confirmation link to finish creating your account. Once
+          confirmed, log in to continue.
+        </p>
+        <Link to="/login" className="mt-6 text-sm text-accent hover:underline">
+          Go to log in
+        </Link>
+      </div>
+    )
   }
 
   return (
@@ -55,7 +107,7 @@ export function SignupPage() {
       </div>
 
       <div className="flex items-center justify-center px-4 py-12 sm:px-10">
-        <form onSubmit={handleSubmit} className="w-full max-w-sm">
+        <form onSubmit={handleSubmit(onSubmit)} className="w-full max-w-sm">
           <h2 className="font-display text-2xl font-semibold tracking-tight">
             Sign up
           </h2>
@@ -70,11 +122,15 @@ export function SignupPage() {
               </span>
               <input
                 type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
                 placeholder="Jane Doe"
+                {...register('name')}
                 className="w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30"
               />
+              {errors.name && (
+                <span className="mt-1 block text-xs text-brand-error">
+                  {errors.name.message}
+                </span>
+              )}
             </label>
 
             <label className="block">
@@ -83,42 +139,76 @@ export function SignupPage() {
               </span>
               <input
                 type="email"
-                disabled
                 placeholder="you@example.com"
-                className="w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none disabled:cursor-not-allowed dark:border-paper/20 dark:placeholder:text-paper/30"
+                {...register('email')}
+                className="w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30"
               />
+              {errors.email && (
+                <span className="mt-1 block text-xs text-brand-error">
+                  {errors.email.message}
+                </span>
+              )}
             </label>
 
-            <div>
+            <label className="block">
               <span className="mb-1.5 block font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
-                I am a
+                Password
               </span>
-              <div className="grid grid-cols-2 gap-2">
-                {SIGNUP_ROLES.map((opt) => (
-                  <button
-                    key={opt.role}
-                    type="button"
-                    onClick={() => setRole(opt.role)}
-                    className={
-                      'border px-3 py-2.5 text-left transition-colors ' +
-                      (role === opt.role
-                        ? 'border-accent bg-accent/10'
-                        : 'border-ink/15 hover:border-ink/30 dark:border-paper/15 dark:hover:border-paper/30')
-                    }
-                  >
-                    <span className="block text-sm font-medium">
-                      {opt.label}
-                    </span>
-                    <span className="mt-0.5 block text-xs text-ink/50 dark:text-paper/50">
-                      {opt.hint}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
+              <input
+                type="password"
+                placeholder="••••••••"
+                {...register('password')}
+                className="w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30"
+              />
+              {errors.password && (
+                <span className="mt-1 block text-xs text-brand-error">
+                  {errors.password.message}
+                </span>
+              )}
+            </label>
 
-            <Button type="submit" className="w-full">
-              Create account
+            <Controller
+              name="role"
+              control={control}
+              render={({ field }) => (
+                <div>
+                  <span className="mb-1.5 block font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
+                    I am a
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {SIGNUP_ROLES.map((opt) => (
+                      <button
+                        key={opt.role}
+                        type="button"
+                        onClick={() => field.onChange(opt.role)}
+                        className={
+                          'border px-3 py-2.5 text-left transition-colors ' +
+                          (role === opt.role
+                            ? 'border-accent bg-accent/10'
+                            : 'border-ink/15 hover:border-ink/30 dark:border-paper/15 dark:hover:border-paper/30')
+                        }
+                      >
+                        <span className="block text-sm font-medium">
+                          {opt.label}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-ink/50 dark:text-paper/50">
+                          {opt.hint}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            />
+
+            {errors.root && (
+              <span className="block text-xs text-brand-error">
+                {errors.root.message}
+              </span>
+            )}
+
+            <Button type="submit" disabled={isSubmitting} className="w-full">
+              {isSubmitting ? 'Creating account…' : 'Create account'}
             </Button>
           </div>
 
@@ -128,16 +218,6 @@ export function SignupPage() {
               Log in
             </Link>
           </p>
-
-          {import.meta.env.DEV && (
-            <div className="mt-6 flex items-center gap-2 border-t border-dashed border-ink/20 pt-5 dark:border-paper/20">
-              <Badge variant="accent">Preview</Badge>
-              <span className="text-xs text-ink/50 dark:text-paper/50">
-                No Firebase project yet — this creates a local preview
-                session only.
-              </span>
-            </div>
-          )}
         </form>
       </div>
     </div>

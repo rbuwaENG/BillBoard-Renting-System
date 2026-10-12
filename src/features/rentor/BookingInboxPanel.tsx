@@ -1,8 +1,9 @@
 import { Check, X } from 'lucide-react'
 import { useState } from 'react'
 import { Button, Card } from '@/components'
+import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { BookingStatusBadge } from '@/features/bookings'
-import { useRentorBookingStore } from './rentorBookingStore'
+import { useOwnerBookings, useRespondToBooking } from './useRentorBookings'
 
 function formatDateRange(start: string, end: string) {
   const s = new Date(start)
@@ -12,9 +13,10 @@ function formatDateRange(start: string, end: string) {
 }
 
 export function BookingInboxPanel() {
-  const requests = useRentorBookingStore((s) => s.requests)
-  const approve = useRentorBookingStore((s) => s.approve)
-  const reject = useRentorBookingStore((s) => s.reject)
+  const formatPrice = useFormatPrice()
+  const { data } = useOwnerBookings()
+  const requests = data ?? []
+  const respondToBooking = useRespondToBooking()
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [reason, setReason] = useState('')
 
@@ -23,7 +25,11 @@ export function BookingInboxPanel() {
   )
 
   function confirmReject(id: string) {
-    reject(id, reason.trim() || 'No reason given.')
+    respondToBooking.mutate({
+      bookingId: id,
+      approve: false,
+      reason: reason.trim() || 'No reason given.',
+    })
     setRejectingId(null)
     setReason('')
   }
@@ -58,7 +64,7 @@ export function BookingInboxPanel() {
 
           <div className="mt-3 flex items-center justify-between gap-2">
             <span className="font-mono text-sm font-semibold text-accent">
-              ${r.priceQuoted.toLocaleString()}
+              {formatPrice(r.priceQuoted)}
             </span>
 
             {r.status === 'pending_owner_review' && (
@@ -88,7 +94,12 @@ export function BookingInboxPanel() {
                   </>
                 ) : (
                   <>
-                    <Button size="sm" onClick={() => approve(r.id)}>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        respondToBooking.mutate({ bookingId: r.id, approve: true })
+                      }
+                    >
                       <Check className="size-3.5" />
                       Approve
                     </Button>
