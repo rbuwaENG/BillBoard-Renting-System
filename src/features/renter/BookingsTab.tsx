@@ -2,10 +2,10 @@ import { Star } from 'lucide-react'
 import { useState } from 'react'
 import { BillboardMark, Button, Card } from '@/components'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
-import { BookingStatusBadge } from '@/features/bookings'
+import { BookingStatusBadge, CreativeLink } from '@/features/bookings'
 import type { Booking } from '@/types'
 import { formatDateRange } from './formatDateRange'
-import { useMyBookings } from './useMyBookings'
+import { useMyBookings, useRenterPayBooking } from './useMyBookings'
 import { ReviewDialog } from './ReviewDialog'
 
 const SPEND_COUNTED_STATUSES = new Set<Booking['status']>([
@@ -29,6 +29,8 @@ export function BookingsTab({ onSelectBillboard }: BookingsTabProps) {
   const formatPrice = useFormatPrice()
   const { data } = useMyBookings()
   const myBookings = data ?? []
+  const payBooking = useRenterPayBooking()
+  const [payingId, setPayingId] = useState<string | null>(null)
   const [reviewingBooking, setReviewingBooking] = useState<
     { id: string; billboardTitle: string } | null
   >(null)
@@ -103,11 +105,29 @@ export function BookingsTab({ onSelectBillboard }: BookingsTabProps) {
                 </div>
               </div>
 
+              {booking.creativeUrl && <CreativeLink path={booking.creativeUrl} />}
+
               <div className="mt-2.5 flex items-center justify-between gap-2">
                 <span className="font-mono text-sm font-semibold text-accent">
                   {formatPrice(booking.priceQuoted)}
                 </span>
                 <div className="flex shrink-0 items-center gap-2">
+                  {booking.status === 'payment_pending' && (
+                    <Button
+                      size="sm"
+                      disabled={payBooking.isPending && payingId === booking.id}
+                      onClick={() => {
+                        setPayingId(booking.id)
+                        payBooking.mutate(booking.id, {
+                          onSuccess: () => setPayingId(null),
+                        })
+                      }}
+                    >
+                      {payBooking.isPending && payingId === booking.id
+                        ? 'Paying…'
+                        : 'Pay now'}
+                    </Button>
+                  )}
                   {booking.status === 'completed' &&
                     (booking.review ? (
                       <span className="flex items-center gap-1 font-mono text-xs text-ink/50 dark:text-paper/50">
@@ -137,6 +157,19 @@ export function BookingsTab({ onSelectBillboard }: BookingsTabProps) {
                   </Button>
                 </div>
               </div>
+
+              {booking.status === 'payment_pending' && (
+                <p className="mt-1.5 text-right text-[11px] text-ink/40 italic dark:text-paper/40">
+                  No live payment gateway is configured yet — "Pay now"
+                  simulates a successful payment.
+                </p>
+              )}
+
+              {payBooking.isError && payingId === booking.id && (
+                <p className="mt-1.5 text-right text-xs text-brand-error">
+                  {(payBooking.error as Error).message}
+                </p>
+              )}
             </div>
           ))
         )}

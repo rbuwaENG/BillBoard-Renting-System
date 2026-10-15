@@ -216,10 +216,22 @@ function RequestBookingForm({
         </span>
         <input
           type="file"
-          accept="image/*,application/pdf"
+          accept="image/*,video/*,application/pdf"
           onChange={(e) => setCreativeFile(e.target.files?.[0] ?? null)}
           className="w-full text-sm file:mr-3 file:border file:border-ink/20 file:bg-transparent file:px-2 file:py-1 file:font-mono file:text-[11px] file:uppercase dark:file:border-paper/20"
         />
+        {creativeFile && (
+          <p className="mt-1 font-mono text-[11px] text-ink/50 dark:text-paper/50">
+            {creativeFile.type.startsWith('video/')
+              ? 'Video'
+              : creativeFile.type.startsWith('image/')
+                ? 'Image'
+                : creativeFile.type === 'application/pdf'
+                  ? 'PDF'
+                  : 'File'}{' '}
+            selected · {creativeFile.name}
+          </p>
+        )}
       </label>
 
       {rate !== null && (

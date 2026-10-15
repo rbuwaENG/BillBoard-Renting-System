@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createSupabaseMock } from '@/test/supabaseMock'
 import { supabase } from '@/lib/supabase'
-import { getBookingCreativeUrl, uploadBookingCreative } from './creativeStorage'
+import {
+  getBookingCreativeUrl,
+  getCreativeFilename,
+  getCreativeKind,
+  uploadBookingCreative,
+} from './creativeStorage'
 
 vi.mock('@/lib/supabase', () => ({ supabase: createSupabaseMock() }))
 
@@ -33,5 +38,29 @@ describe('getBookingCreativeUrl', () => {
 
     const url = await getBookingCreativeUrl('missing/path.png')
     expect(url).toBeNull()
+  })
+})
+
+describe('getCreativeKind', () => {
+  it.each([
+    ['booking-1/uuid-photo.jpg', 'image'],
+    ['booking-1/uuid-photo.PNG', 'image'],
+    ['booking-1/uuid-clip.mp4', 'video'],
+    ['booking-1/uuid-spec.pdf', 'pdf'],
+    ['booking-1/uuid-notes.txt', 'other'],
+  ] as const)('classifies %s as %s', (path, kind) => {
+    expect(getCreativeKind(path)).toBe(kind)
+  })
+})
+
+describe('getCreativeFilename', () => {
+  it('strips the uuid prefix without cutting into the uuid itself', () => {
+    expect(
+      getCreativeFilename('booking-1/3fa85f64-5717-4562-b3fc-2c963f66afa6-my-ad.png'),
+    ).toBe('my-ad.png')
+  })
+
+  it('returns the name as-is when there is no uuid prefix', () => {
+    expect(getCreativeFilename('booking-1/my-ad.png')).toBe('my-ad.png')
   })
 })

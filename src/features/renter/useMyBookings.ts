@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import type { Booking } from '@/types'
@@ -64,5 +64,22 @@ export function useMyBookings() {
       return (data as unknown as BookingRow[]).map(toMyBooking)
     },
     enabled: !!user,
+  })
+}
+
+// Self-service "Pay now" — since no live payment gateway is wired up yet,
+// this simulates a successful charge for the booking's quoted price and
+// moves it straight to confirmed. Swap this RPC's internals for a real
+// gateway call later without changing the calling UI.
+export function useRenterPayBooking() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (bookingId: string) => {
+      const { error } = await supabase.rpc('renter_pay_booking', {
+        p_booking_id: bookingId,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-bookings'] }),
   })
 }
