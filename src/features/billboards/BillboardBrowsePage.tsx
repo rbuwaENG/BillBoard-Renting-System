@@ -12,6 +12,7 @@ import { BillboardPanel } from './BillboardPanel'
 import { CurrentLocationLayer } from './CurrentLocationLayer'
 import type { LocateStatus } from './locateStatus'
 import { MapOverlayControls } from './MapOverlayControls'
+import { TrafficLegend } from './TrafficLegend'
 import { useBillboards, useBillboardsNear, type BillboardWithDetails } from './useBillboards'
 
 const DEFAULT_CENTER: [number, number] = [20.5937, 78.9629]
@@ -210,6 +211,8 @@ export function BillboardBrowsePage() {
           onViewDetails={handleSelect}
         />
       </MapContainer>
+
+      <TrafficLegend />
 
       <MapOverlayControls
         billboards={billboards}

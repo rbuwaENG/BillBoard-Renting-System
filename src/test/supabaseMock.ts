@@ -54,5 +54,8 @@ export function createSupabaseMock() {
       signOut: vi.fn(() => Promise.resolve({ error: null })),
       onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
     },
+    functions: {
+      invoke: vi.fn(() => Promise.resolve({ data: { ok: true }, error: null })),
+    },
   }
 }

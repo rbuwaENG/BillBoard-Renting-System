@@ -14,6 +14,8 @@ export interface RentorBillboard {
   size: string
   location: { lat: number; lng: number; address: string; city: string }
   pricePerDay: number
+  salePricePerDay: number | null
+  adminPriceOverridePerDay: number | null
   images: string[]
   status: BillboardStatus
   district: string | null
@@ -33,6 +35,7 @@ export interface RentorBillboardInput {
   lat: number
   lng: number
   pricePerDay: number
+  salePricePerDay: number | null
   images: string[]
   district: string | null
   trafficLevel: TrafficLevel | null
@@ -50,6 +53,8 @@ interface RentorBillboardRow {
   address: string
   city: string
   price_per_day: number
+  sale_price_per_day: number | null
+  admin_price_override_per_day: number | null
   images: string[]
   status: BillboardStatus
   district: string | null
@@ -74,6 +79,8 @@ function toRentorBillboard(row: RentorBillboardRow): RentorBillboard {
     size: row.sizes?.label ?? '—',
     location: { lat: row.lat, lng: row.lng, address: row.address, city: row.city },
     pricePerDay: row.price_per_day,
+    salePricePerDay: row.sale_price_per_day,
+    adminPriceOverridePerDay: row.admin_price_override_per_day,
     images: row.images,
     status: row.status,
     district: row.district,
@@ -142,6 +149,7 @@ export function useCreateBillboard() {
         lat: input.lat,
         lng: input.lng,
         price_per_day: input.pricePerDay,
+        sale_price_per_day: input.salePricePerDay,
         images: input.images,
         district: input.district,
         traffic_level: input.trafficLevel,
@@ -174,6 +182,7 @@ export function useUpdateBillboard() {
           lat: input.lat,
           lng: input.lng,
           price_per_day: input.pricePerDay,
+          sale_price_per_day: input.salePricePerDay,
           images: input.images,
           district: input.district,
           traffic_level: input.trafficLevel,

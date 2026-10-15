@@ -75,6 +75,8 @@ export interface AdminPayout {
   ownerId: string
   ownerName: string
   amount: number
+  grossAmount: number
+  feeAmount: number
   currency: string
   status: PayoutStatus
   scheduledReleaseDate: string
@@ -86,6 +88,8 @@ interface PayoutRow {
   id: string
   owner_id: string
   amount: number
+  gross_amount: number
+  fee_amount: number
   currency: string
   status: PayoutStatus
   scheduled_release_date: string
@@ -109,6 +113,8 @@ export function useAdminPayouts() {
           ownerId: row.owner_id,
           ownerName: row.profiles?.display_name ?? 'Rentor',
           amount: row.amount,
+          grossAmount: row.gross_amount,
+          feeAmount: row.fee_amount,
           currency: row.currency,
           status: row.status,
           scheduledReleaseDate: row.scheduled_release_date,

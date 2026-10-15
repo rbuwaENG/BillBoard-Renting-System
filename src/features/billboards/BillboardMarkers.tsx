@@ -3,6 +3,8 @@ import { ChevronRight } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { Marker, Popup, useMap } from 'react-leaflet'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
+import { getDisplayPrice } from './pricing'
+import { TRAFFIC_COLORS, TRAFFIC_LABELS } from './trafficLevel'
 import type { BillboardWithDetails } from './useBillboards'
 
 // Same glyph as the brand mark (src/components/BillboardMark.tsx), inlined
@@ -16,9 +18,17 @@ const BILLBOARD_GLYPH = `
   </svg>
 `
 
-function priceTagIcon(formattedPrice: string) {
+function priceTagIcon(
+  formattedPrice: string,
+  trafficColor: string | null,
+  onSale: boolean,
+) {
+  const dot = trafficColor
+    ? `<span style="display:inline-block;width:7px;height:7px;border-radius:9999px;background:${trafficColor};flex-shrink:0" aria-hidden="true"></span>`
+    : ''
+  const background = onSale ? 'bg-accent' : 'bg-ink'
   return L.divIcon({
-    html: `<div class="flex w-max items-center gap-1 justify-center border border-paper/40 bg-ink px-2 py-1 font-mono text-[11px] font-semibold whitespace-nowrap text-paper shadow-md">${BILLBOARD_GLYPH}${formattedPrice}</div>`,
+    html: `<div class="flex w-max items-center gap-1 justify-center border border-paper/40 ${background} px-2 py-1 font-mono text-[11px] font-semibold whitespace-nowrap text-paper shadow-md">${BILLBOARD_GLYPH}${formattedPrice}${dot}</div>`,
     className: '',
     iconSize: [64, 24],
     iconAnchor: [32, 24],
@@ -54,42 +64,63 @@ export function BillboardMarkers({
 
   return (
     <>
-      {billboards.map((billboard) => (
-        <Marker
-          key={billboard.id}
-          position={[billboard.location.lat, billboard.location.lng]}
-          icon={priceTagIcon(formatPrice(billboard.pricePerDay))}
-          ref={(ref) => {
-            markerRefs.current[billboard.id] = ref
-          }}
-        >
-          <Popup>
-            <button
-              type="button"
-              onClick={() => onViewDetails(billboard.id)}
-              className="min-w-40 cursor-pointer text-left font-display"
-            >
-              <span className="font-mono text-[10px] tracking-widest text-accent uppercase">
-                {billboard.category}
-              </span>
-              <h3 className="mt-0.5 text-sm font-semibold tracking-tight text-ink dark:text-paper">
-                {billboard.title}
-              </h3>
-              <p className="mt-0.5 text-xs text-ink/60 dark:text-paper/60">
-                {billboard.location.city} · {billboard.size}
-              </p>
-              <p className="mt-1.5 font-mono text-sm font-semibold text-accent">
-                {formatPrice(billboard.pricePerDay)}
-                <span className="text-ink/40 dark:text-paper/40">/day</span>
-              </p>
-              <span className="mt-2 flex items-center gap-0.5 border-t border-ink/10 pt-1.5 text-[11px] font-medium text-accent dark:border-paper/15">
-                View details
-                <ChevronRight className="size-3" />
-              </span>
-            </button>
-          </Popup>
-        </Marker>
-      ))}
+      {billboards.map((billboard) => {
+        const { price, strikethroughFrom } = getDisplayPrice(billboard)
+        return (
+          <Marker
+            key={billboard.id}
+            position={[billboard.location.lat, billboard.location.lng]}
+            icon={priceTagIcon(
+              formatPrice(price),
+              billboard.trafficLevel ? TRAFFIC_COLORS[billboard.trafficLevel] : null,
+              strikethroughFrom !== null,
+            )}
+            ref={(ref) => {
+              markerRefs.current[billboard.id] = ref
+            }}
+          >
+            <Popup>
+              <button
+                type="button"
+                onClick={() => onViewDetails(billboard.id)}
+                className="min-w-40 cursor-pointer text-left font-display"
+              >
+                <span className="font-mono text-[10px] tracking-widest text-accent uppercase">
+                  {billboard.category}
+                </span>
+                <h3 className="mt-0.5 text-sm font-semibold tracking-tight text-ink dark:text-paper">
+                  {billboard.title}
+                </h3>
+                <p className="mt-0.5 text-xs text-ink/60 dark:text-paper/60">
+                  {billboard.location.city} · {billboard.size}
+                </p>
+                {billboard.trafficLevel && (
+                  <p className="mt-1 flex items-center gap-1.5 text-[11px] text-ink/60 dark:text-paper/60">
+                    <span
+                      className="inline-block size-1.5 rounded-full"
+                      style={{ background: TRAFFIC_COLORS[billboard.trafficLevel] }}
+                    />
+                    {TRAFFIC_LABELS[billboard.trafficLevel]}
+                  </p>
+                )}
+                <p className="mt-1.5 flex items-baseline gap-1.5 font-mono text-sm font-semibold text-accent">
+                  {strikethroughFrom !== null && (
+                    <span className="text-xs font-normal text-ink/40 line-through dark:text-paper/40">
+                      {formatPrice(strikethroughFrom)}
+                    </span>
+                  )}
+                  {formatPrice(price)}
+                  <span className="text-ink/40 dark:text-paper/40">/day</span>
+                </p>
+                <span className="mt-2 flex items-center gap-0.5 border-t border-ink/10 pt-1.5 text-[11px] font-medium text-accent dark:border-paper/15">
+                  View details
+                  <ChevronRight className="size-3" />
+                </span>
+              </button>
+            </Popup>
+          </Marker>
+        )
+      })}
     </>
   )
 }

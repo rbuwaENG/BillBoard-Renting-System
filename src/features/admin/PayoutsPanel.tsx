@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Badge, Button, Card } from '@/components'
-import { useFormatPrice } from './useCurrencySetting'
+import { useCurrencySetting, useFormatPrice } from './useCurrencySetting'
 import {
   useAdminPayouts,
   useCreatePayout,
@@ -17,6 +17,8 @@ const STATUS_BADGE_CLASSES: Record<string, string> = {
 
 function CreatePayoutCard({ group }: { group: PayableOwnerGroup }) {
   const formatPrice = useFormatPrice()
+  const { data: settings } = useCurrencySetting()
+  const feePercent = settings?.platformFeePercent ?? 0
   const createPayout = useCreatePayout()
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(
@@ -24,9 +26,11 @@ function CreatePayoutCard({ group }: { group: PayableOwnerGroup }) {
   )
   const [releaseDate, setReleaseDate] = useState('')
 
-  const selectedTotal = group.bookings
+  const selectedGross = group.bookings
     .filter((b) => selected.has(b.id))
     .reduce((sum, b) => sum + b.priceQuoted, 0)
+  const selectedFee = Math.round(selectedGross * feePercent) / 100
+  const selectedTotal = selectedGross - selectedFee
 
   function toggle(id: string) {
     setSelected((s) => {
@@ -81,6 +85,12 @@ function CreatePayoutCard({ group }: { group: PayableOwnerGroup }) {
               </li>
             ))}
           </ul>
+          {feePercent > 0 && (
+            <p className="text-xs text-ink/50 dark:text-paper/50">
+              {formatPrice(selectedGross)} gross − {formatPrice(selectedFee)} fee
+              ({feePercent}%) = {formatPrice(selectedTotal)} net
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <input
               type="date"
@@ -161,6 +171,11 @@ export function PayoutsPanel() {
                   <p className="font-mono text-[11px] tracking-wide text-ink/50 uppercase dark:text-paper/50">
                     Release {p.scheduledReleaseDate}
                   </p>
+                  {p.feeAmount > 0 && (
+                    <p className="mt-0.5 text-xs text-ink/40 dark:text-paper/40">
+                      {formatPrice(p.grossAmount)} gross − {formatPrice(p.feeAmount)} fee
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <span className="font-mono text-sm font-semibold text-accent">

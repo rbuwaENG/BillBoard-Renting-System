@@ -7,6 +7,8 @@ interface PayoutRow {
   id: string
   owner_id: string
   amount: number
+  gross_amount: number
+  fee_amount: number
   currency: string
   status: Payout['status']
   scheduled_release_date: string
@@ -21,6 +23,8 @@ function toPayout(row: PayoutRow): Payout {
     id: row.id,
     ownerId: row.owner_id,
     amount: row.amount,
+    grossAmount: row.gross_amount,
+    feeAmount: row.fee_amount,
     currency: row.currency,
     status: row.status,
     scheduledReleaseDate: row.scheduled_release_date,

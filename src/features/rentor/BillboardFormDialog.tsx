@@ -1,9 +1,14 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { ExternalLink, LocateFixed, X } from 'lucide-react'
+import { ExternalLink, LocateFixed, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Button } from '@/components'
 import { useCategories, useSizes } from '@/features/admin/useTaxonomy'
 import { useCurrencySetting } from '@/features/admin/useCurrencySetting'
+import {
+  usePricingTiers,
+  useSavePricingTiers,
+  type PricingTierInput,
+} from '@/features/billboards/usePricingTiers'
 import { useAuth } from '@/hooks/useAuth'
 import { lookupDistrict, trafficMapUrl } from '@/lib/geocode'
 import type { TrafficLevel } from '@/types'
@@ -39,6 +44,7 @@ const EMPTY: RentorBillboardInput = {
   lat: DEFAULT_LAT,
   lng: DEFAULT_LNG,
   pricePerDay: 0,
+  salePricePerDay: null,
   images: [],
   district: null,
   trafficLevel: null,
@@ -50,6 +56,125 @@ function fieldLabelClass() {
 
 function inputClass() {
   return 'w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30'
+}
+
+// Duration-based discount tiers (e.g. "7-29 days: $90/day") — only
+// meaningful once the billboard exists, same constraint as the booking
+// creative upload needing a booking id first (src/features/billboards/BillboardDetailDialog.tsx).
+function PricingTiersEditor({ billboardId }: { billboardId: string }) {
+  const { data } = usePricingTiers(billboardId)
+  const saveTiers = useSavePricingTiers(billboardId)
+  const [rows, setRows] = useState<PricingTierInput[] | null>(null)
+
+  const tiers = rows ?? (data ?? []).map((t) => ({
+    minDays: t.minDays,
+    maxDays: t.maxDays,
+    pricePerDay: t.pricePerDay,
+  }))
+
+  function updateRow(index: number, patch: Partial<PricingTierInput>) {
+    setRows(tiers.map((r, i) => (i === index ? { ...r, ...patch } : r)))
+  }
+
+  function addRow() {
+    setRows([...tiers, { minDays: 1, maxDays: null, pricePerDay: 0 }])
+  }
+
+  function removeRow(index: number) {
+    setRows(tiers.filter((_, i) => i !== index))
+  }
+
+  return (
+    <div className="border-t border-dashed border-ink/15 pt-4 dark:border-paper/15">
+      <div className="flex items-center justify-between">
+        <span className={fieldLabelClass()}>Pricing packages (optional)</span>
+        <button
+          type="button"
+          onClick={addRow}
+          className="flex items-center gap-1 font-mono text-[11px] tracking-widest text-accent uppercase hover:underline"
+        >
+          <Plus className="size-3" />
+          Add tier
+        </button>
+      </div>
+      <p className="mb-2 font-mono text-[11px] text-ink/50 dark:text-paper/50">
+        Offer a cheaper per-day rate for longer bookings. A booking's length
+        picks the matching tier automatically.
+      </p>
+
+      {tiers.length === 0 ? (
+        <p className="text-xs text-ink/40 dark:text-paper/40">
+          No pricing tiers yet — bookings use the regular/sale price.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {tiers.map((row, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                value={row.minDays}
+                onChange={(e) => updateRow(i, { minDays: Number(e.target.value) })}
+                placeholder="Min days"
+                title="Minimum days"
+                className="w-20 border-b border-ink/20 bg-transparent py-1.5 text-xs focus:border-accent focus:outline-none dark:border-paper/20"
+              />
+              <span className="text-xs text-ink/40 dark:text-paper/40">to</span>
+              <input
+                type="number"
+                min={row.minDays}
+                value={row.maxDays ?? ''}
+                onChange={(e) =>
+                  updateRow(i, {
+                    maxDays: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+                placeholder="∞"
+                title="Maximum days (blank = unlimited)"
+                className="w-20 border-b border-ink/20 bg-transparent py-1.5 text-xs placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20"
+              />
+              <span className="text-xs text-ink/40 dark:text-paper/40">days @</span>
+              <input
+                type="number"
+                min="0"
+                value={row.pricePerDay || ''}
+                onChange={(e) =>
+                  updateRow(i, { pricePerDay: Number(e.target.value) })
+                }
+                placeholder="Price/day"
+                className="flex-1 border-b border-ink/20 bg-transparent py-1.5 text-xs placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20"
+              />
+              <button
+                type="button"
+                onClick={() => removeRow(i)}
+                title="Remove tier"
+                className="shrink-0 text-ink/40 hover:text-brand-error dark:text-paper/40"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {saveTiers.isError && (
+        <p className="mt-2 text-xs text-brand-error">
+          {(saveTiers.error as Error).message}
+        </p>
+      )}
+
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        className="mt-2"
+        disabled={saveTiers.isPending}
+        onClick={() => saveTiers.mutate(tiers)}
+      >
+        {saveTiers.isPending ? 'Saving…' : 'Save packages'}
+      </Button>
+    </div>
+  )
 }
 
 export function BillboardFormDialog({
@@ -85,6 +210,7 @@ export function BillboardFormDialog({
         lat: editing.location.lat,
         lng: editing.location.lng,
         pricePerDay: editing.pricePerDay,
+        salePricePerDay: editing.salePricePerDay,
         images: editing.images,
         district: editing.district,
         trafficLevel: editing.trafficLevel,
@@ -132,10 +258,16 @@ export function BillboardFormDialog({
     })
   }
 
+  const salePriceError =
+    form.salePricePerDay !== null && form.salePricePerDay >= form.pricePerDay
+      ? 'Sale price must be lower than the regular price'
+      : null
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!form.title.trim() || !form.city.trim() || !form.pricePerDay) return
     if (!form.categoryId || !form.sizeId || !user) return
+    if (salePriceError) return
 
     let images = form.images
     if (newFiles.length > 0) {
@@ -326,22 +458,45 @@ export function BillboardFormDialog({
                 </div>
               </div>
 
-              <label className="block">
-                <span className={fieldLabelClass()}>
-                  Price per day ({currencySetting?.currency ?? 'LKR'})
-                </span>
-                <input
-                  required
-                  type="number"
-                  min="1"
-                  value={form.pricePerDay || ''}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, pricePerDay: Number(e.target.value) }))
-                  }
-                  placeholder="150"
-                  className={inputClass()}
-                />
-              </label>
+              <div className="grid grid-cols-2 gap-4">
+                <label className="block">
+                  <span className={fieldLabelClass()}>
+                    Price per day ({currencySetting?.currency ?? 'LKR'})
+                  </span>
+                  <input
+                    required
+                    type="number"
+                    min="1"
+                    value={form.pricePerDay || ''}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, pricePerDay: Number(e.target.value) }))
+                    }
+                    placeholder="150"
+                    className={inputClass()}
+                  />
+                </label>
+                <label className="block">
+                  <span className={fieldLabelClass()}>Sale price (optional)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.salePricePerDay ?? ''}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        salePricePerDay: e.target.value ? Number(e.target.value) : null,
+                      }))
+                    }
+                    placeholder="e.g. 120"
+                    className={inputClass()}
+                  />
+                </label>
+              </div>
+              {salePriceError && (
+                <p className="-mt-3 text-xs text-brand-error">{salePriceError}</p>
+              )}
+
+              {editing && <PricingTiersEditor billboardId={editing.id} />}
 
               <label className="block">
                 <span className={fieldLabelClass()}>Images</span>
@@ -362,7 +517,11 @@ export function BillboardFormDialog({
             </div>
 
             <div className="border-t border-ink/10 p-5 dark:border-paper/15">
-              <Button type="submit" disabled={uploading} className="w-full">
+              <Button
+                type="submit"
+                disabled={uploading || !!salePriceError}
+                className="w-full"
+              >
                 {uploading
                   ? 'Uploading images…'
                   : editing

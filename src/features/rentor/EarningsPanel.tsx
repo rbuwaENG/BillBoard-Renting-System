@@ -71,6 +71,11 @@ export function EarningsPanel() {
                       ? `Released ${p.releasedAt?.slice(0, 10)}`
                       : `Scheduled for ${p.scheduledReleaseDate}`}
                   </p>
+                  {p.feeAmount > 0 && (
+                    <p className="mt-0.5 text-xs text-ink/40 dark:text-paper/40">
+                      {formatPrice(p.grossAmount)} gross − {formatPrice(p.feeAmount)} fee
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <Badge className={STATUS_BADGE_CLASSES[p.status]}>

@@ -5,6 +5,7 @@ import { useCampaignStore } from '@/features/campaigns/campaignStore'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import { getDisplayPrice } from './pricing'
 import type { BillboardWithDetails } from './useBillboards'
 
 // Deterministic placeholder "photo" panel — no stock images, so nothing
@@ -70,6 +71,7 @@ export function BillboardCard({
   distanceKm,
 }: BillboardCardProps) {
   const formatPrice = useFormatPrice()
+  const { price, strikethroughFrom } = getDisplayPrice(billboard)
   return (
     <div
       role="button"
@@ -98,8 +100,13 @@ export function BillboardCard({
           {distanceKm !== undefined && <> · {Math.round(distanceKm)} km away</>}
         </p>
         <div className="mt-2 flex items-center justify-between">
-          <span className="font-mono text-sm font-semibold text-accent">
-            {formatPrice(billboard.pricePerDay)}
+          <span className="flex items-baseline gap-1.5 font-mono text-sm font-semibold text-accent">
+            {strikethroughFrom !== null && (
+              <span className="text-xs font-normal text-ink/40 line-through dark:text-paper/40">
+                {formatPrice(strikethroughFrom)}
+              </span>
+            )}
+            {formatPrice(price)}
             <span className="text-ink/40 dark:text-paper/40">/day</span>
           </span>
           <span className="flex items-center gap-1 font-mono text-xs text-ink/60 dark:text-paper/60">

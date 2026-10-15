@@ -59,3 +59,33 @@ export function useToggleUserStatus() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   })
 }
+
+export function usePromoteToAdmin() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (uid: string) => {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: 'admin' })
+        .eq('id', uid)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+  })
+}
+
+export function useInviteAdmin() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { email: string; name: string }) => {
+      const { data, error } = await supabase.functions.invoke(
+        'admin-invite-user',
+        { body: input },
+      )
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      return data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+  })
+}

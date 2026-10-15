@@ -1,9 +1,13 @@
+import { useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { BillboardMark, Button } from '@/components'
+import { useCurrencySetting } from '@/features/admin/useCurrencySetting'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 import { useAuth, useAuthStore } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import type { UserRole } from '@/types'
+
+const DEFAULT_SITE_NAME = 'Billboard Renting System'
 
 interface NavLinkDef {
   to: string
@@ -21,6 +25,12 @@ const NAV_LINKS: NavLinkDef[] = [
 export function RootLayout() {
   const { user, role } = useAuth()
   const signOut = useAuthStore((s) => s.signOut)
+  const { data: settings } = useCurrencySetting()
+  const siteName = settings?.siteName || DEFAULT_SITE_NAME
+
+  useEffect(() => {
+    document.title = siteName
+  }, [siteName])
 
   const visibleLinks = NAV_LINKS.filter(
     (link) => !link.roles || (role && link.roles.includes(role)),
@@ -31,9 +41,19 @@ export function RootLayout() {
       <header className="border-b border-ink/10 dark:border-paper/10">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <NavLink to="/" className="flex items-center gap-2.5">
-            <BillboardMark className="size-7" />
+            {settings?.siteLogoUrl ? (
+              <img src={settings.siteLogoUrl} alt={siteName} className="h-7 w-auto" />
+            ) : (
+              <BillboardMark className="size-7" />
+            )}
             <span className="font-display text-[15px] leading-none font-semibold tracking-tight">
-              Billboard Renting <span className="text-accent">System</span>
+              {settings?.siteName ? (
+                siteName
+              ) : (
+                <>
+                  Billboard Renting <span className="text-accent">System</span>
+                </>
+              )}
             </span>
           </NavLink>
 

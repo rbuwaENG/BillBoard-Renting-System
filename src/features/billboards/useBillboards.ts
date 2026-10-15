@@ -14,6 +14,8 @@ export interface BillboardWithDetails {
   size: string
   location: { lat: number; lng: number; address: string; city: string }
   pricePerDay: number
+  salePricePerDay: number | null
+  adminPriceOverridePerDay: number | null
   images: string[]
   status: BillboardStatus
   district: string | null
@@ -33,6 +35,8 @@ export interface BillboardRow {
   address: string
   city: string
   price_per_day: number
+  sale_price_per_day: number | null
+  admin_price_override_per_day: number | null
   images: string[]
   status: BillboardStatus
   district: string | null
@@ -59,6 +63,8 @@ export function toBillboard(row: BillboardRow): BillboardWithDetails {
     size: row.sizes?.label ?? '—',
     location: { lat: row.lat, lng: row.lng, address: row.address, city: row.city },
     pricePerDay: row.price_per_day,
+    salePricePerDay: row.sale_price_per_day,
+    adminPriceOverridePerDay: row.admin_price_override_per_day,
     images: row.images,
     status: row.status,
     district: row.district,

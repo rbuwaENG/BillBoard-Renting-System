@@ -15,6 +15,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { distanceKm } from '@/lib/geohash'
 import { cn } from '@/lib/utils'
 import type { TrafficLevel } from '@/types'
+import { getDisplayPrice, resolveEffectivePricePerDay } from './pricing'
+import { usePricingTiers } from './usePricingTiers'
 import { useDistrictProfile } from './useDistrictProfile'
 import type { BillboardWithDetails } from './useBillboards'
 
@@ -120,17 +122,6 @@ function SiteInsights({
   )
 }
 
-// Rough day/week/month packages computed from the daily rate — a future
-// admin-managed pricing tiers feature could replace this with real tiers
-// stored per billboard.
-function pricingPackages(pricePerDay: number) {
-  return [
-    { label: 'Day', price: pricePerDay },
-    { label: 'Week', price: Math.round(pricePerDay * 7 * 0.9) },
-    { label: 'Month', price: Math.round(pricePerDay * 30 * 0.75) },
-  ]
-}
-
 function RequestBookingForm({
   billboard,
   onDone,
@@ -144,6 +135,21 @@ function RequestBookingForm({
   const [uploadingCreative, setUploadingCreative] = useState(false)
   const requestBooking = useRequestBooking()
   const attachBookingCreative = useAttachBookingCreative()
+  const { data: tiers } = usePricingTiers(billboard.id)
+  const formatPrice = useFormatPrice()
+
+  const days =
+    startDate && endDate
+      ? Math.max(
+          1,
+          Math.round(
+            (new Date(endDate).getTime() - new Date(startDate).getTime()) /
+              86_400_000,
+          ) + 1,
+        )
+      : 0
+  const rate =
+    days > 0 ? resolveEffectivePricePerDay(billboard, days, tiers) : null
 
   async function handleSubmit() {
     if (!startDate || !endDate) return
@@ -216,6 +222,13 @@ function RequestBookingForm({
         />
       </label>
 
+      {rate !== null && (
+        <p className="text-right font-mono text-sm text-accent">
+          {days} day{days !== 1 ? 's' : ''} × {formatPrice(rate)}/day ={' '}
+          <span className="font-semibold">{formatPrice(rate * days)}</span>
+        </p>
+      )}
+
       {requestBooking.isError && (
         <p className="text-xs text-brand-error">
           {(requestBooking.error as Error).message}
@@ -245,6 +258,7 @@ export function BillboardDetailDialog({
   const { user } = useAuth()
   const navigate = useNavigate()
   const formatPrice = useFormatPrice()
+  const { data: tiers } = usePricingTiers(billboard?.id ?? null)
   const [showChat, setShowChat] = useState(false)
   const [showBookingForm, setShowBookingForm] = useState(false)
   const [requestSent, setRequestSent] = useState(false)
@@ -379,24 +393,50 @@ export function BillboardDetailDialog({
 
                   <div className="border-t border-ink/10 pt-4 dark:border-paper/10">
                     <span className="font-mono text-xs tracking-widest text-ink/40 uppercase dark:text-paper/40">
-                      Packages
+                      Price
                     </span>
-                    <div className="mt-2 grid grid-cols-3 gap-2">
-                      {pricingPackages(billboard.pricePerDay).map((pkg) => (
-                        <div
-                          key={pkg.label}
-                          className="border border-ink/10 p-3 text-center dark:border-paper/15"
-                        >
-                          <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
-                            {pkg.label}
-                          </span>
-                          <p className="mt-1 font-mono text-sm font-semibold text-accent">
-                            {formatPrice(pkg.price)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="mt-1 flex items-baseline gap-2 font-mono text-lg font-semibold text-accent">
+                      {(() => {
+                        const { price, strikethroughFrom } = getDisplayPrice(billboard)
+                        return (
+                          <>
+                            {strikethroughFrom !== null && (
+                              <span className="text-sm font-normal text-ink/40 line-through dark:text-paper/40">
+                                {formatPrice(strikethroughFrom)}
+                              </span>
+                            )}
+                            {formatPrice(price)}
+                            <span className="text-sm text-ink/40 dark:text-paper/40">/day</span>
+                          </>
+                        )
+                      })()}
+                    </p>
                   </div>
+
+                  {tiers && tiers.length > 0 && (
+                    <div className="border-t border-ink/10 pt-4 dark:border-paper/10">
+                      <span className="font-mono text-xs tracking-widest text-ink/40 uppercase dark:text-paper/40">
+                        Packages
+                      </span>
+                      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {tiers.map((tier) => (
+                          <div
+                            key={tier.id}
+                            className="border border-ink/10 p-3 text-center dark:border-paper/15"
+                          >
+                            <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
+                              {tier.minDays}
+                              {tier.maxDays ? `–${tier.maxDays}` : '+'} days
+                            </span>
+                            <p className="mt-1 font-mono text-sm font-semibold text-accent">
+                              {formatPrice(tier.pricePerDay)}
+                              <span className="text-ink/40 dark:text-paper/40">/day</span>
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="border-t border-ink/10 pt-4 dark:border-paper/10">
                     <span className="font-mono text-xs tracking-widest text-ink/40 uppercase dark:text-paper/40">

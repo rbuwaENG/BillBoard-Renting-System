@@ -2,6 +2,7 @@ import { ClipboardList, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Tabs, type TabItem } from '@/components'
 import { MapIconButton } from '@/features/billboards/MapIconButton'
+import { useMapPopoverStore } from '@/features/billboards/mapPopoverStore'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
 import { useMyChatThreads } from '@/features/chat/useChat'
 import { BookingsTab } from './BookingsTab'
@@ -22,7 +23,9 @@ interface RenterBookingsControlProps {
 export function RenterBookingsControl({
   onSelectBillboard,
 }: RenterBookingsControlProps) {
-  const [open, setOpen] = useState(true)
+  const open = useMapPopoverStore((s) => s.active === 'activity')
+  const togglePopover = useMapPopoverStore((s) => s.toggle)
+  const closePopover = useMapPopoverStore((s) => s.close)
   const [tab, setTab] = useState('bookings')
   const { data: myBookings } = useMyBookings()
   const draftCount = useCampaignStore((s) => s.draftIds.length)
@@ -49,7 +52,7 @@ export function RenterBookingsControl({
       <MapIconButton
         title="My activity"
         active={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => togglePopover('activity')}
         className="relative"
       >
         <ClipboardList className="size-4" />
@@ -70,7 +73,7 @@ export function RenterBookingsControl({
             </div>
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={closePopover}
               title="Close"
               className="text-ink/40 hover:text-ink dark:text-paper/40 dark:hover:text-paper"
             >

@@ -7,6 +7,7 @@ import { useCreateCampaign } from '@/features/renter/useCampaigns'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { MapIconButton } from './MapIconButton'
+import { useMapPopoverStore } from './mapPopoverStore'
 import type { BillboardWithDetails } from './useBillboards'
 
 interface MapOverlayControlsProps {
@@ -64,7 +65,9 @@ function CampaignControl({ billboards }: { billboards: BillboardWithDetails[] })
   const { user } = useAuth()
   const navigate = useNavigate()
   const formatPrice = useFormatPrice()
-  const [open, setOpen] = useState(false)
+  const open = useMapPopoverStore((s) => s.active === 'campaign')
+  const togglePopover = useMapPopoverStore((s) => s.toggle)
+  const closePopover = useMapPopoverStore((s) => s.close)
   const [name, setName] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -95,7 +98,7 @@ function CampaignControl({ billboards }: { billboards: BillboardWithDetails[] })
       navigate('/login')
       return
     }
-    setOpen((o) => !o)
+    togglePopover('campaign')
   }
 
   async function handleCreate() {
@@ -111,7 +114,7 @@ function CampaignControl({ billboards }: { billboards: BillboardWithDetails[] })
       setName('')
       setStartDate('')
       setEndDate('')
-      setOpen(false)
+      closePopover()
       clearDraft()
     } catch {
       // error surfaced via createCampaign.error below
@@ -247,8 +250,9 @@ export function MapOverlayControls({
   const { user } = useAuth()
   const navigate = useNavigate()
   const formatPrice = useFormatPrice()
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [nearMeOpen, setNearMeOpen] = useState(false)
+  const filtersOpen = useMapPopoverStore((s) => s.active === 'filters')
+  const nearMeOpen = useMapPopoverStore((s) => s.active === 'nearme')
+  const togglePopover = useMapPopoverStore((s) => s.toggle)
   const [priceMin, priceCeil] = priceBounds
 
   function handleToggleMyBillboards() {
@@ -278,7 +282,7 @@ export function MapOverlayControls({
             selectedSizes.size > 0 ||
             priceMax < priceCeil
           }
-          onClick={() => setFiltersOpen((o) => !o)}
+          onClick={() => togglePopover('filters')}
         >
           <SlidersHorizontal className="size-4" />
         </MapIconButton>
@@ -367,7 +371,7 @@ export function MapOverlayControls({
           }
           active={nearMeOpen || nearMeActive}
           disabled={nearMeDisabled}
-          onClick={() => setNearMeOpen((o) => !o)}
+          onClick={() => togglePopover('nearme')}
         >
           <LocateFixed className="size-4" />
         </MapIconButton>

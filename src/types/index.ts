@@ -34,6 +34,8 @@ export interface Billboard {
   sizeId: string
   location: BillboardLocation
   pricePerDay: number
+  salePricePerDay?: number | null
+  adminPriceOverridePerDay?: number | null
   images: string[]
   status: BillboardStatus
   district?: string
@@ -41,6 +43,14 @@ export interface Billboard {
   rating: { avg: number; count: number }
   createdAt: string
   updatedAt: string
+}
+
+export interface PricingTier {
+  id: string
+  billboardId: string
+  minDays: number
+  maxDays: number | null
+  pricePerDay: number
 }
 
 export type BookingStatus =
@@ -124,6 +134,8 @@ export interface Payout {
   id: string
   ownerId: string
   amount: number
+  grossAmount: number
+  feeAmount: number
   currency: string
   status: PayoutStatus
   scheduledReleaseDate: string
