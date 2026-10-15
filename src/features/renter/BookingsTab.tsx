@@ -1,9 +1,12 @@
+import { Star } from 'lucide-react'
+import { useState } from 'react'
 import { BillboardMark, Button, Card } from '@/components'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { BookingStatusBadge } from '@/features/bookings'
 import type { Booking } from '@/types'
 import { formatDateRange } from './formatDateRange'
 import { useMyBookings } from './useMyBookings'
+import { ReviewDialog } from './ReviewDialog'
 
 const SPEND_COUNTED_STATUSES = new Set<Booking['status']>([
   'payment_pending',
@@ -26,6 +29,9 @@ export function BookingsTab({ onSelectBillboard }: BookingsTabProps) {
   const formatPrice = useFormatPrice()
   const { data } = useMyBookings()
   const myBookings = data ?? []
+  const [reviewingBooking, setReviewingBooking] = useState<
+    { id: string; billboardTitle: string } | null
+  >(null)
   const bookings = [...myBookings].sort((a, b) =>
     b.startDate.localeCompare(a.startDate),
   )
@@ -101,19 +107,51 @@ export function BookingsTab({ onSelectBillboard }: BookingsTabProps) {
                 <span className="font-mono text-sm font-semibold text-accent">
                   {formatPrice(booking.priceQuoted)}
                 </span>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => onSelectBillboard(booking.billboardId)}
-                  className="shrink-0"
-                >
-                  View on map
-                </Button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {booking.status === 'completed' &&
+                    (booking.review ? (
+                      <span className="flex items-center gap-1 font-mono text-xs text-ink/50 dark:text-paper/50">
+                        <Star className="size-3.5 fill-accent text-accent" />
+                        {booking.review.rating}/5
+                      </span>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          setReviewingBooking({
+                            id: booking.id,
+                            billboardTitle: booking.billboardTitle,
+                          })
+                        }
+                      >
+                        Leave a review
+                      </Button>
+                    ))}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onSelectBillboard(booking.billboardId)}
+                  >
+                    View on map
+                  </Button>
+                </div>
               </div>
             </div>
           ))
         )}
       </div>
+
+      {reviewingBooking && (
+        <ReviewDialog
+          bookingId={reviewingBooking.id}
+          billboardTitle={reviewingBooking.billboardTitle}
+          open={reviewingBooking !== null}
+          onOpenChange={(open) => {
+            if (!open) setReviewingBooking(null)
+          }}
+        />
+      )}
     </div>
   )
 }

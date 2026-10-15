@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { MapContainer, TileLayer, ZoomControl } from 'react-leaflet'
 import { RenterBookingsControl } from '@/features/renter'
 import { useMyBookings } from '@/features/renter/useMyBookings'
+import { useAdvanceBookingLifecycle } from '@/hooks/useAdvanceBookingLifecycle'
 import { useAuth } from '@/hooks/useAuth'
 import { usePrefersDark } from '@/hooks/usePrefersDark'
 import { distanceKm } from '@/lib/geohash'
@@ -32,6 +33,7 @@ const TILE_ATTRIBUTION =
   'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community'
 
 export function BillboardBrowsePage() {
+  useAdvanceBookingLifecycle()
   const { role } = useAuth()
   const { data: billboardsData } = useBillboards()
   const { data: myBookings } = useMyBookings()

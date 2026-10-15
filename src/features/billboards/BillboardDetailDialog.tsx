@@ -3,9 +3,13 @@ import { Calendar, Check, MessageCircle, Plus, Star, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Badge, BillboardMark, Button } from '@/components'
-import { useRequestBooking } from '@/features/bookings/useRequestBooking'
+import { uploadBookingCreative } from '@/features/bookings/creativeStorage'
+import {
+  useAttachBookingCreative,
+  useRequestBooking,
+} from '@/features/bookings/useRequestBooking'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
-import { ChatPanel } from '@/features/chat/ChatPanel'
+import { RenterChatPanel } from '@/features/chat/RenterChatPanel'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { useAuth } from '@/hooks/useAuth'
 import { distanceKm } from '@/lib/geohash'
@@ -136,18 +140,33 @@ function RequestBookingForm({
 }) {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [creativeUrl, setCreativeUrl] = useState('')
+  const [creativeFile, setCreativeFile] = useState<File | null>(null)
+  const [uploadingCreative, setUploadingCreative] = useState(false)
   const requestBooking = useRequestBooking()
+  const attachBookingCreative = useAttachBookingCreative()
 
   async function handleSubmit() {
     if (!startDate || !endDate) return
     try {
-      await requestBooking.mutateAsync({
+      const booking = await requestBooking.mutateAsync({
         billboardId: billboard.id,
         startDate,
         endDate,
-        creativeUrl: creativeUrl.trim() || undefined,
       })
+      if (creativeFile) {
+        setUploadingCreative(true)
+        try {
+          const path = await uploadBookingCreative(creativeFile, booking.id)
+          await attachBookingCreative.mutateAsync({
+            bookingId: booking.id,
+            creativePath: path,
+          })
+        } catch (err) {
+          console.error('Creative upload failed:', err)
+        } finally {
+          setUploadingCreative(false)
+        }
+      }
       onDone()
     } catch {
       // error surfaced via requestBooking.error below
@@ -187,14 +206,13 @@ function RequestBookingForm({
 
       <label className="block">
         <span className="mb-1 block font-mono text-[11px] text-ink/50 uppercase dark:text-paper/50">
-          Creative URL (optional)
+          Creative file (optional)
         </span>
         <input
-          type="url"
-          value={creativeUrl}
-          onChange={(e) => setCreativeUrl(e.target.value)}
-          placeholder="https://…"
-          className="w-full border-b border-ink/20 bg-transparent py-1.5 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30"
+          type="file"
+          accept="image/*,application/pdf"
+          onChange={(e) => setCreativeFile(e.target.files?.[0] ?? null)}
+          className="w-full text-sm file:mr-3 file:border file:border-ink/20 file:bg-transparent file:px-2 file:py-1 file:font-mono file:text-[11px] file:uppercase dark:file:border-paper/20"
         />
       </label>
 
@@ -206,10 +224,14 @@ function RequestBookingForm({
 
       <Button
         onClick={handleSubmit}
-        disabled={!startDate || !endDate || requestBooking.isPending}
+        disabled={!startDate || !endDate || requestBooking.isPending || uploadingCreative}
         className="w-full"
       >
-        {requestBooking.isPending ? 'Sending request…' : 'Send booking request'}
+        {requestBooking.isPending
+          ? 'Sending request…'
+          : uploadingCreative
+            ? 'Uploading creative…'
+            : 'Send booking request'}
       </Button>
     </div>
   )
@@ -281,7 +303,7 @@ export function BillboardDetailDialog({
 
               {showChat ? (
                 <div className="flex-1 p-5 sm:p-6">
-                  <ChatPanel
+                  <RenterChatPanel
                     billboardId={billboard.id}
                     ownerName={billboard.ownerName}
                     onBack={() => setShowChat(false)}

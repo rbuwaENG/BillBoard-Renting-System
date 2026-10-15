@@ -1,8 +1,9 @@
-import { Check, X } from 'lucide-react'
+import { Check, Paperclip, X } from 'lucide-react'
 import { useState } from 'react'
 import { Button, Card } from '@/components'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { BookingStatusBadge } from '@/features/bookings'
+import { getBookingCreativeUrl } from '@/features/bookings/creativeStorage'
 import { useOwnerBookings, useRespondToBooking } from './useRentorBookings'
 
 function formatDateRange(start: string, end: string) {
@@ -23,6 +24,11 @@ export function BookingInboxPanel() {
   const sorted = [...requests].sort((a, b) =>
     b.createdAt.localeCompare(a.createdAt),
   )
+
+  async function viewCreative(path: string) {
+    const url = await getBookingCreativeUrl(path)
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+  }
 
   function confirmReject(id: string) {
     respondToBooking.mutate({
@@ -60,6 +66,17 @@ export function BookingInboxPanel() {
             <p className="mt-2 text-xs text-ink/50 italic dark:text-paper/50">
               Reason: {r.rejectionReason}
             </p>
+          )}
+
+          {r.creativeUrl && (
+            <button
+              type="button"
+              onClick={() => viewCreative(r.creativeUrl!)}
+              className="mt-2 flex items-center gap-1 font-mono text-[11px] tracking-wide text-accent uppercase hover:underline"
+            >
+              <Paperclip className="size-3" />
+              View creative
+            </button>
           )}
 
           <div className="mt-3 flex items-center justify-between gap-2">

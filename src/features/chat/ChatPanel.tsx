@@ -1,33 +1,27 @@
 import { ArrowLeft, Send } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components'
+import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
-import { useChatStore, type ChatMessage } from './chatStore'
+import { useChatMessages, useSendChatMessage } from './useChat'
 
 interface ChatPanelProps {
-  billboardId: string
-  ownerName: string
+  threadId: string
+  title: string
   onBack: () => void
 }
 
-// Stable reference for "no thread yet" — `?? []` would create a new array
-// every selector call, and since Zustand's useSyncExternalStore compares
-// snapshots by reference, that read as "changed" on every render and caused
-// an infinite render loop (crashed with "Maximum update depth exceeded")
-// the first time a billboard had no existing messages.
-const EMPTY_MESSAGES: ChatMessage[] = []
-
-export function ChatPanel({ billboardId, ownerName, onBack }: ChatPanelProps) {
-  const messages = useChatStore(
-    (s) => s.messagesByBillboard[billboardId] ?? EMPTY_MESSAGES,
-  )
-  const sendMessage = useChatStore((s) => s.sendMessage)
+export function ChatPanel({ threadId, title, onBack }: ChatPanelProps) {
+  const { user } = useAuth()
+  const { data } = useChatMessages(threadId)
+  const messages = data ?? []
+  const sendMessage = useSendChatMessage()
   const [draft, setDraft] = useState('')
 
   function handleSend() {
-    const text = draft.trim()
-    if (!text) return
-    sendMessage(billboardId, text)
+    const body = draft.trim()
+    if (!body || !user) return
+    sendMessage.mutate({ threadId, senderId: user.uid, body })
     setDraft('')
   }
 
@@ -39,15 +33,12 @@ export function ChatPanel({ billboardId, ownerName, onBack }: ChatPanelProps) {
         className="flex items-center gap-1.5 font-mono text-[11px] tracking-widest text-ink/50 uppercase hover:text-ink dark:text-paper/50 dark:hover:text-paper"
       >
         <ArrowLeft className="size-3.5" />
-        Back to details
+        Back
       </button>
 
       <h3 className="mt-3 font-display text-lg font-semibold tracking-tight">
-        Chat with {ownerName}
+        Chat with {title}
       </h3>
-      <p className="text-xs text-ink/50 dark:text-paper/50">
-        Preview — simulated replies. Real messaging lands in Phase 6.
-      </p>
 
       <div className="mt-4 flex-1 space-y-3 overflow-y-auto border-y border-dashed border-ink/15 py-4 dark:border-paper/15">
         {messages.length === 0 ? (
@@ -60,18 +51,18 @@ export function ChatPanel({ billboardId, ownerName, onBack }: ChatPanelProps) {
               key={m.id}
               className={cn(
                 'flex',
-                m.sender === 'renter' ? 'justify-end' : 'justify-start',
+                m.senderId === user?.uid ? 'justify-end' : 'justify-start',
               )}
             >
               <div
                 className={cn(
                   'max-w-[80%] border px-3 py-2 text-sm',
-                  m.sender === 'renter'
+                  m.senderId === user?.uid
                     ? 'border-accent bg-accent text-paper'
                     : 'border-ink/15 bg-paper text-ink dark:border-paper/15 dark:bg-ink-soft dark:text-paper',
                 )}
               >
-                {m.text}
+                {m.body}
               </div>
             </div>
           ))

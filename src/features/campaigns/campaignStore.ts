@@ -1,38 +1,20 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-// A campaign bundles several billboards under one renter-created plan. Not
-// part of PLAN.md's original Firestore schema — Phase 5/6 would add a real
-// `campaigns` collection (one doc per campaign, a booking created per
-// billboard on submit) once a Firebase project exists; this is a local,
-// per-browser preview of the workflow.
-export interface Campaign {
-  id: string
-  name: string
-  billboardIds: string[]
-  startDate: string
-  endDate: string
-  createdAt: string
-}
-
-interface CampaignState {
+// The "add to campaign" cart is genuinely ephemeral, pre-submit UI state —
+// kept client-only. Submitted campaigns themselves are real rows in the
+// `campaigns`/`campaign_items` tables (see useCampaigns.ts).
+interface CampaignDraftState {
   draftIds: string[]
-  campaigns: Campaign[]
   toggleDraft: (id: string) => void
   removeFromDraft: (id: string) => void
-  createCampaign: (input: {
-    name: string
-    startDate: string
-    endDate: string
-  }) => void
-  deleteCampaign: (id: string) => void
+  clearDraft: () => void
 }
 
-export const useCampaignStore = create<CampaignState>()(
+export const useCampaignStore = create<CampaignDraftState>()(
   persist(
     (set) => ({
       draftIds: [],
-      campaigns: [],
       toggleDraft: (id) =>
         set((s) => ({
           draftIds: s.draftIds.includes(id)
@@ -41,24 +23,8 @@ export const useCampaignStore = create<CampaignState>()(
         })),
       removeFromDraft: (id) =>
         set((s) => ({ draftIds: s.draftIds.filter((x) => x !== id) })),
-      createCampaign: ({ name, startDate, endDate }) =>
-        set((s) => ({
-          campaigns: [
-            {
-              id: crypto.randomUUID(),
-              name,
-              billboardIds: s.draftIds,
-              startDate,
-              endDate,
-              createdAt: new Date().toISOString(),
-            },
-            ...s.campaigns,
-          ],
-          draftIds: [],
-        })),
-      deleteCampaign: (id) =>
-        set((s) => ({ campaigns: s.campaigns.filter((c) => c.id !== id) })),
+      clearDraft: () => set({ draftIds: [] }),
     }),
-    { name: 'billboard-campaigns-preview' },
+    { name: 'billboard-campaigns-draft' },
   ),
 )

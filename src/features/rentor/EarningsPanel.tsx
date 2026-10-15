@@ -1,33 +1,24 @@
-import { Card } from '@/components'
+import { Badge, Card } from '@/components'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
-import { BookingStatusBadge } from '@/features/bookings'
-import type { BookingStatus } from '@/types'
-import { useOwnerBookings } from './useRentorBookings'
+import { useMyPayouts } from './useMyPayouts'
 
-const EARNED_STATUSES = new Set<BookingStatus>(['confirmed', 'active', 'completed'])
-const PENDING_STATUSES = new Set<BookingStatus>(['payment_pending'])
-
-function formatDateRange(start: string, end: string) {
-  const s = new Date(start)
-  const e = new Date(end)
-  const short: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
-  return `${s.toLocaleDateString('en-US', short)} – ${e.toLocaleDateString('en-US', { ...short, year: 'numeric' })}`
+const STATUS_BADGE_CLASSES: Record<string, string> = {
+  approved: 'border-accent/40 text-accent',
+  paid: 'border-brand-success/40 text-brand-success',
+  cancelled: 'border-brand-error/40 text-brand-error',
 }
 
 export function EarningsPanel() {
   const formatPrice = useFormatPrice()
-  const { data } = useOwnerBookings()
-  const requests = data ?? []
+  const { data } = useMyPayouts()
+  const payouts = data ?? []
 
-  const earned = requests
-    .filter((r) => EARNED_STATUSES.has(r.status))
-    .reduce((sum, r) => sum + r.priceQuoted, 0)
-  const pending = requests
-    .filter((r) => PENDING_STATUSES.has(r.status))
-    .reduce((sum, r) => sum + r.priceQuoted, 0)
-  const payoutRows = [...requests]
-    .filter((r) => EARNED_STATUSES.has(r.status) || PENDING_STATUSES.has(r.status))
-    .sort((a, b) => b.startDate.localeCompare(a.startDate))
+  const totalPaid = payouts
+    .filter((p) => p.status === 'paid')
+    .reduce((sum, p) => sum + p.amount, 0)
+  const totalPending = payouts
+    .filter((p) => p.status === 'approved')
+    .reduce((sum, p) => sum + p.amount, 0)
 
   return (
     <div className="space-y-6">
@@ -37,7 +28,7 @@ export function EarningsPanel() {
             Total earned
           </span>
           <p className="mt-1 font-display text-2xl font-semibold text-accent">
-            {formatPrice(earned)}
+            {formatPrice(totalPaid)}
           </p>
         </Card>
         <Card className="p-4">
@@ -45,15 +36,15 @@ export function EarningsPanel() {
             Pending payout
           </span>
           <p className="mt-1 font-display text-2xl font-semibold">
-            {formatPrice(pending)}
+            {formatPrice(totalPending)}
           </p>
         </Card>
         <Card className="p-4">
           <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
-            Paid bookings
+            Payouts
           </span>
           <p className="mt-1 font-display text-2xl font-semibold">
-            {payoutRows.length}
+            {payouts.length}
           </p>
         </Card>
       </div>
@@ -62,27 +53,31 @@ export function EarningsPanel() {
         <h3 className="font-display text-lg font-semibold tracking-tight">
           Payout history
         </h3>
-        {payoutRows.length === 0 ? (
+        {payouts.length === 0 ? (
           <p className="mt-4 text-sm text-ink/40 dark:text-paper/40">
-            No paid or in-progress bookings yet.
+            No payouts yet — an admin schedules a payout once your bookings
+            are confirmed and paid.
           </p>
         ) : (
           <ul className="mt-4 space-y-2">
-            {payoutRows.map((r) => (
+            {payouts.map((p) => (
               <li
-                key={r.id}
+                key={p.id}
                 className="flex items-center justify-between gap-3 border-b border-ink/5 pb-2 text-sm last:border-0 dark:border-paper/10"
               >
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{r.billboardTitle}</p>
                   <p className="font-mono text-[11px] tracking-wide text-ink/50 uppercase dark:text-paper/50">
-                    {r.renterName} · {formatDateRange(r.startDate, r.endDate)}
+                    {p.status === 'paid'
+                      ? `Released ${p.releasedAt?.slice(0, 10)}`
+                      : `Scheduled for ${p.scheduledReleaseDate}`}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  <BookingStatusBadge status={r.status} />
+                  <Badge className={STATUS_BADGE_CLASSES[p.status]}>
+                    {p.status}
+                  </Badge>
                   <span className="font-mono font-semibold text-accent">
-                    {formatPrice(r.priceQuoted)}
+                    {formatPrice(p.amount)}
                   </span>
                 </div>
               </li>

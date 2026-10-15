@@ -51,6 +51,7 @@ export function SignupPage() {
       password: values.password,
       options: {
         data: { display_name: values.name, role: values.role },
+        emailRedirectTo: `${window.location.origin}/login`,
       },
     })
     if (error) {

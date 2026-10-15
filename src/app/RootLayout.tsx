@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { BillboardMark, Button } from '@/components'
+import { NotificationBell } from '@/features/notifications/NotificationBell'
 import { useAuth, useAuthStore } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import type { UserRole } from '@/types'
@@ -56,6 +57,7 @@ export function RootLayout() {
 
           {user ? (
             <div className="flex items-center gap-3">
+              <NotificationBell />
               <NavLink
                 to="/profile"
                 className={({ isActive }) =>

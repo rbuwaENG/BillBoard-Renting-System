@@ -75,10 +75,13 @@ export interface Payment {
   bookingId: string
   renterId: string
   ownerId: string
-  stripePaymentIntentId: string
+  stripePaymentIntentId?: string
   amount: number
   currency: string
   status: 'pending' | 'succeeded' | 'failed' | 'refunded'
+  reference?: string
+  confirmedBy?: string
+  confirmedAt?: string
   createdAt: string
 }
 
@@ -102,5 +105,30 @@ export interface Review {
   renterId: string
   rating: number
   comment?: string
+  createdAt: string
+}
+
+export interface Notification {
+  id: string
+  userId: string
+  type: string
+  message: string
+  read: boolean
+  refId?: string
+  createdAt: string
+}
+
+export type PayoutStatus = 'approved' | 'paid' | 'cancelled'
+
+export interface Payout {
+  id: string
+  ownerId: string
+  amount: number
+  currency: string
+  status: PayoutStatus
+  scheduledReleaseDate: string
+  approvedBy: string
+  approvedAt: string
+  releasedAt?: string
   createdAt: string
 }

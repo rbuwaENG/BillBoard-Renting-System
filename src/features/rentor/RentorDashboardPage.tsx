@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react'
 import { Tabs, type TabItem } from '@/components'
+import { useAdvanceBookingLifecycle } from '@/hooks/useAdvanceBookingLifecycle'
 import { BookingInboxPanel } from './BookingInboxPanel'
 import { EarningsPanel } from './EarningsPanel'
+import { MessagesPanel } from './MessagesPanel'
 import { MyBillboardsPanel } from './MyBillboardsPanel'
 import { useOwnerBookings } from './useRentorBookings'
 
 export function RentorDashboardPage() {
+  useAdvanceBookingLifecycle()
   const [tab, setTab] = useState('billboards')
   const { data } = useOwnerBookings()
   const pendingCount = (data ?? []).filter(
@@ -19,6 +22,7 @@ export function RentorDashboardPage() {
         key: 'bookings',
         label: pendingCount > 0 ? `Bookings (${pendingCount})` : 'Bookings',
       },
+      { key: 'messages', label: 'Messages' },
       { key: 'earnings', label: 'Earnings' },
     ],
     [pendingCount],
@@ -40,6 +44,7 @@ export function RentorDashboardPage() {
       <div className="mt-6">
         {tab === 'billboards' && <MyBillboardsPanel />}
         {tab === 'bookings' && <BookingInboxPanel />}
+        {tab === 'messages' && <MessagesPanel />}
         {tab === 'earnings' && <EarningsPanel />}
       </div>
     </div>

@@ -6,6 +6,7 @@ import type { Booking } from '@/types'
 export interface MyBooking extends Booking {
   billboardTitle: string
   billboardCity: string
+  review: { id: string; rating: number } | null
 }
 
 interface BookingRow {
@@ -24,6 +25,7 @@ interface BookingRow {
   updated_at: string
   decision_at: string | null
   billboards: { title: string; city: string } | null
+  reviews: { id: string; rating: number }[] | null
 }
 
 function toMyBooking(row: BookingRow): MyBooking {
@@ -44,6 +46,7 @@ function toMyBooking(row: BookingRow): MyBooking {
     decisionAt: row.decision_at ?? undefined,
     billboardTitle: row.billboards?.title ?? 'Billboard',
     billboardCity: row.billboards?.city ?? '',
+    review: row.reviews?.[0] ?? null,
   }
 }
 
@@ -54,7 +57,7 @@ export function useMyBookings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('bookings')
-        .select('*, billboards(title, city)')
+        .select('*, billboards(title, city), reviews(id, rating)')
         .eq('renter_id', user!.uid)
         .order('created_at', { ascending: false })
       if (error) throw error

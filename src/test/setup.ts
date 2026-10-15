@@ -1,4 +1,13 @@
+import { cleanup } from '@testing-library/react'
+import { afterEach } from 'vitest'
 import '@testing-library/jest-dom/vitest'
+
+// Unmount React trees between tests — without this, a component rendered
+// in one test is still in the document for the next `render()` in the same
+// file, and queries like getByRole can match leftover elements from both.
+afterEach(() => {
+  cleanup()
+})
 
 // jsdom doesn't implement matchMedia — polyfill it for hooks like
 // usePrefersDark that read prefers-color-scheme.

@@ -172,18 +172,20 @@ supabase/
 4. **Public browse & map** — map + list view with filters (category, size, price, location radius via `billboards_near`), billboard detail page. ✅ done.
 5. **Booking flow (Renter)** — request-booking dialog (dates, optional creative URL), `request_booking` RPC, status tracking in "My bookings". ✅ done.
 6. **Rentor booking inbox** — pending requests list, `respond_to_booking` RPC (approve/reject) with reason. ✅ done.
-7. **Payments** — Stripe Checkout session on approval, webhook confirms booking, payment history for both sides. *(not started — `payments` table exists, no Edge Functions/UI yet)*
-8. **Notifications** — in-app notification feed via a Postgres trigger + Supabase Realtime. *(not started — `notifications` table exists, unused)*
-9. **Admin panel** — categories/sizes management, user management (suspend), billboard moderation (flag/unpublish), platform analytics dashboard. ✅ done.
-10. **Reviews & polish** — post-completion review/rating, empty/error/loading states, accessibility pass. *(not started — `reviews` table exists, no submission UI)*
-11. **Testing & hardening** — RLS policy tests, Vitest coverage on hooks/components. *(not started beyond the original smoke test)*
-12. **CI/CD & deploy** — GitHub Actions pipeline (lint/test/build → deploy static build), Stripe live keys for production.
+7. **Payments** — admin-operated manual confirmation (no Stripe account; admin marks a `payment_pending` booking as paid via `admin_confirm_payment`, Admin → Payments tab). ✅ done.
+8. **Notifications** — in-app notification bell, written by Postgres triggers on booking/review events and payout RPCs, live via Supabase Realtime. ✅ done.
+9. **Admin panel** — categories/sizes management, user management (suspend), billboard moderation (flag/unpublish), platform analytics dashboard, payments confirmation, payouts. ✅ done.
+10. **Reviews & polish** — post-completion review/rating (`submit_review` RPC, renter "Leave a review" dialog, billboard rating auto-recalculated by trigger). ✅ done.
+11. **Testing & hardening** — Vitest coverage on the new hooks/components (reviews, payments, payouts, chat, campaigns, creative upload, booking inbox) via a reusable Supabase client mock. *(RLS/pgTAP-level DB tests still not attempted — see Open Items)*
+12. **CI/CD & deploy** — GitHub Actions pipeline (lint/test/build), deployed to Vercel.
+
+Additionally, beyond the original 12 phases: **booking lifecycle automation** (`confirmed`→`active`→`completed` via a `pg_cron` job + on-demand RPC fallback) and a **payout mechanism** (admin approves + schedules a release date per rentor; `payouts`/`payout_items` tables; auto-release on the scheduled date via the same cron job, or a manual "Release now") are both done — see `supabase/migrations/0015_lifecycle_automation.sql` and `0016_payouts.sql`.
 
 ---
 
 ## 8. Open Items to Revisit Later
 
-- Payout mechanism to Rentors (manual admin payout vs. Stripe Connect) — start manual, note Stripe Connect as a future enhancement.
+- Real payment gateway (Stripe or similar) to replace the admin-manual confirmation, if/when actual card processing is needed — the `payments` table already has the legacy `stripe_payment_intent_id` column reserved for this.
+- Stripe Connect (or similar) as an alternative to the current manual admin-scheduled payout model, if automated bank transfers become necessary.
 - Availability model: simple date-range overlap check vs. full calendar table — currently a simple overlap check inside `request_booking`, upgrade if needed.
-- Chat (`src/features/chat/*`) and campaigns (`src/features/campaigns/*`) are still local-only simulations with no backend table — revisit if/when those become real features.
-- Image upload for booking creatives (currently a plain URL field in the booking request dialog) could move to the `booking-creatives` Storage bucket like billboard images already do.
+- RLS/pgTAP-level database tests (currently only frontend hooks/components are covered by Vitest).

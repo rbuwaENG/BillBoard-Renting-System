@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { Tabs, type TabItem } from '@/components'
 import { MapIconButton } from '@/features/billboards/MapIconButton'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
-import { useChatStore } from '@/features/chat/chatStore'
+import { useMyChatThreads } from '@/features/chat/useChat'
 import { BookingsTab } from './BookingsTab'
 import { CampaignsTab } from './CampaignsTab'
 import { MessagesTab } from './MessagesTab'
@@ -26,10 +26,8 @@ export function RenterBookingsControl({
   const [tab, setTab] = useState('bookings')
   const { data: myBookings } = useMyBookings()
   const draftCount = useCampaignStore((s) => s.draftIds.length)
-  const threadCount = useChatStore(
-    (s) => Object.values(s.messagesByBillboard).filter((m) => m.length > 0)
-      .length,
-  )
+  const { data: threadsData } = useMyChatThreads()
+  const threadCount = threadsData?.length ?? 0
 
   const tabs = useMemo<TabItem[]>(
     () => [

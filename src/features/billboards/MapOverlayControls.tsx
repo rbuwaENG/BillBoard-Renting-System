@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
+import { useCreateCampaign } from '@/features/renter/useCampaigns'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { MapIconButton } from './MapIconButton'
@@ -69,7 +70,8 @@ function CampaignControl({ billboards }: { billboards: BillboardWithDetails[] })
   const [endDate, setEndDate] = useState('')
   const draftIds = useCampaignStore((s) => s.draftIds)
   const removeFromDraft = useCampaignStore((s) => s.removeFromDraft)
-  const createCampaign = useCampaignStore((s) => s.createCampaign)
+  const clearDraft = useCampaignStore((s) => s.clearDraft)
+  const createCampaign = useCreateCampaign()
 
   const draftBillboards = draftIds
     .map((id) => billboards.find((b) => b.id === id))
@@ -96,14 +98,24 @@ function CampaignControl({ billboards }: { billboards: BillboardWithDetails[] })
     setOpen((o) => !o)
   }
 
-  function handleCreate() {
+  async function handleCreate() {
     if (!name.trim() || !startDate || !endDate || draftBillboards.length === 0)
       return
-    createCampaign({ name: name.trim(), startDate, endDate })
-    setName('')
-    setStartDate('')
-    setEndDate('')
-    setOpen(false)
+    try {
+      await createCampaign.mutateAsync({
+        name: name.trim(),
+        startDate,
+        endDate,
+        billboardIds: draftBillboards.map((b) => b.id),
+      })
+      setName('')
+      setStartDate('')
+      setEndDate('')
+      setOpen(false)
+      clearDraft()
+    } catch {
+      // error surfaced via createCampaign.error below
+    }
   }
 
   return (
@@ -181,18 +193,24 @@ function CampaignControl({ billboards }: { billboards: BillboardWithDetails[] })
                 Est. total {formatPrice(total)}
               </p>
             )}
+            {createCampaign.isError && (
+              <p className="text-xs text-brand-error">
+                {(createCampaign.error as Error).message}
+              </p>
+            )}
             <button
               type="button"
               disabled={
                 !name.trim() ||
                 !startDate ||
                 !endDate ||
-                draftBillboards.length === 0
+                draftBillboards.length === 0 ||
+                createCampaign.isPending
               }
               onClick={handleCreate}
               className="w-full border border-accent bg-accent px-3 py-2 font-mono text-xs uppercase text-paper transition-colors hover:bg-accent-dim disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Create campaign
+              {createCampaign.isPending ? 'Creating…' : 'Create campaign'}
             </button>
           </div>
         </div>

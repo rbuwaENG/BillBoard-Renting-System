@@ -6,9 +6,11 @@ Renter (advertiser), Rentor (billboard owner), and Admin roles. See
 
 The core marketplace flows run against a real Supabase backend: auth +
 roles, billboard browse, Rentor billboard CRUD, booking request + owner
-approve/reject, and the Admin panel (users/taxonomy/moderation/analytics).
-Payments, chat, campaigns, reviews, and notifications are still local/stub —
-see PLAN.md section 8 for what's left.
+approve/reject, the Admin panel (users/taxonomy/moderation/analytics/
+payments/payouts), reviews, in-app notifications, real chat, campaigns, and
+booking lifecycle automation. Payments and payouts are an admin-operated
+manual workflow (no live payment gateway) — see PLAN.md section 8 for what's
+still open.
 
 ## Prerequisites
 

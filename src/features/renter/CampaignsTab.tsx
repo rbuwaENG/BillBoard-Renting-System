@@ -1,13 +1,20 @@
-import { Trash2, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useState } from 'react'
 import { Badge, Button, Card } from '@/components'
 import { useBillboards, type BillboardWithDetails } from '@/features/billboards/useBillboards'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { formatDateRange } from './formatDateRange'
+import { useCreateCampaign, useMyCampaigns } from './useCampaigns'
 
 interface CampaignsTabProps {
   onSelectBillboard: (id: string) => void
+}
+
+const STATUS_BADGE_CLASSES: Record<string, string> = {
+  booked: 'border-brand-success/40 text-brand-success',
+  failed: 'border-brand-error/40 text-brand-error',
+  pending: 'border-ink/20 text-ink/60 dark:border-paper/20 dark:text-paper/60',
 }
 
 // The full create-campaign flow, surfaced here (not only in the small
@@ -19,9 +26,10 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
   const billboards = billboardsData ?? []
   const draftIds = useCampaignStore((s) => s.draftIds)
   const removeFromDraft = useCampaignStore((s) => s.removeFromDraft)
-  const createCampaign = useCampaignStore((s) => s.createCampaign)
-  const campaigns = useCampaignStore((s) => s.campaigns)
-  const deleteCampaign = useCampaignStore((s) => s.deleteCampaign)
+  const clearDraft = useCampaignStore((s) => s.clearDraft)
+  const { data: campaignsData } = useMyCampaigns()
+  const campaigns = campaignsData ?? []
+  const createCampaign = useCreateCampaign()
 
   const [name, setName] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -44,13 +52,23 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
   const draftTotal =
     draftBillboards.reduce((sum, b) => sum + b.pricePerDay, 0) * draftDays
 
-  function handleCreate() {
+  async function handleCreate() {
     if (!name.trim() || !startDate || !endDate || draftBillboards.length === 0)
       return
-    createCampaign({ name: name.trim(), startDate, endDate })
-    setName('')
-    setStartDate('')
-    setEndDate('')
+    try {
+      await createCampaign.mutateAsync({
+        name: name.trim(),
+        startDate,
+        endDate,
+        billboardIds: draftBillboards.map((b) => b.id),
+      })
+      setName('')
+      setStartDate('')
+      setEndDate('')
+      clearDraft()
+    } catch {
+      // error surfaced via createCampaign.error below
+    }
   }
 
   return (
@@ -122,28 +140,31 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
               Est. total {formatPrice(draftTotal)}
             </p>
           )}
+          {createCampaign.isError && (
+            <p className="text-xs text-brand-error">
+              {(createCampaign.error as Error).message}
+            </p>
+          )}
           <Button
             className="w-full"
             disabled={
               !name.trim() ||
               !startDate ||
               !endDate ||
-              draftBillboards.length === 0
+              draftBillboards.length === 0 ||
+              createCampaign.isPending
             }
             onClick={handleCreate}
           >
-            Create campaign
+            {createCampaign.isPending ? 'Creating campaign…' : 'Create campaign'}
           </Button>
         </div>
       </div>
 
       <div>
-        <div className="flex items-center gap-2">
-          <h3 className="font-display text-lg font-semibold tracking-tight">
-            My campaigns
-          </h3>
-          <Badge variant="accent">Preview data</Badge>
-        </div>
+        <h3 className="font-display text-lg font-semibold tracking-tight">
+          My campaigns
+        </h3>
 
         {campaigns.length === 0 ? (
           <p className="mt-3 text-sm text-ink/40 dark:text-paper/40">
@@ -152,64 +173,38 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
           </p>
         ) : (
           <div className="mt-3 space-y-3">
-            {campaigns.map((campaign) => {
-              const campaignBillboards = campaign.billboardIds
-                .map((id) => billboards.find((b) => b.id === id))
-                .filter((b): b is BillboardWithDetails => Boolean(b))
-              const days = Math.max(
-                1,
-                Math.round(
-                  (new Date(campaign.endDate).getTime() -
-                    new Date(campaign.startDate).getTime()) /
-                    86_400_000,
-                ) + 1,
-              )
-              const total =
-                campaignBillboards.reduce((sum, b) => sum + b.pricePerDay, 0) *
-                days
-
-              return (
-                <Card key={campaign.id} className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-display text-sm font-semibold tracking-tight">
-                        {campaign.name}
-                      </p>
-                      <p className="mt-0.5 font-mono text-[11px] tracking-wide text-ink/50 uppercase dark:text-paper/50">
-                        {formatDateRange(campaign.startDate, campaign.endDate)}{' '}
-                        · {campaignBillboards.length} billboard
-                        {campaignBillboards.length !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-3">
-                      <span className="font-mono text-sm font-semibold text-accent">
-                        {formatPrice(total)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => deleteCampaign(campaign.id)}
-                        title="Delete campaign"
-                        className="text-ink/40 hover:text-brand-error dark:text-paper/40"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
-                    </div>
+            {campaigns.map((campaign) => (
+              <Card key={campaign.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-display text-sm font-semibold tracking-tight">
+                      {campaign.name}
+                    </p>
+                    <p className="mt-0.5 font-mono text-[11px] tracking-wide text-ink/50 uppercase dark:text-paper/50">
+                      {formatDateRange(campaign.startDate, campaign.endDate)}{' '}
+                      · {campaign.items.length} billboard
+                      {campaign.items.length !== 1 ? 's' : ''}
+                    </p>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {campaignBillboards.map((b) => (
-                      <button
-                        key={b.id}
-                        type="button"
-                        onClick={() => onSelectBillboard(b.id)}
-                        className="border border-ink/15 px-2 py-1 font-mono text-[11px] uppercase text-ink/70 hover:border-accent hover:text-accent dark:border-paper/15 dark:text-paper/70"
-                      >
-                        {b.title}
-                      </button>
-                    ))}
-                  </div>
-                </Card>
-              )
-            })}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {campaign.items.map((item) => (
+                    <button
+                      key={item.billboardId}
+                      type="button"
+                      onClick={() => onSelectBillboard(item.billboardId)}
+                      title={item.failureReason ?? undefined}
+                      className="flex items-center gap-1.5 border border-ink/15 px-2 py-1 font-mono text-[11px] uppercase text-ink/70 hover:border-accent hover:text-accent dark:border-paper/15 dark:text-paper/70"
+                    >
+                      {item.billboardTitle}
+                      <Badge className={STATUS_BADGE_CLASSES[item.status]}>
+                        {item.status}
+                      </Badge>
+                    </button>
+                  ))}
+                </div>
+              </Card>
+            ))}
           </div>
         )}
       </div>

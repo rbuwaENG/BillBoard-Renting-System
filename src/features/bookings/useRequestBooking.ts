@@ -27,3 +27,26 @@ export function useRequestBooking() {
     },
   })
 }
+
+export function useAttachBookingCreative() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      bookingId,
+      creativePath,
+    }: {
+      bookingId: string
+      creativePath: string
+    }) => {
+      const { error } = await supabase.rpc('attach_booking_creative', {
+        p_booking_id: bookingId,
+        p_creative_path: creativePath,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-bookings'] })
+      qc.invalidateQueries({ queryKey: ['owner-bookings'] })
+    },
+  })
+}

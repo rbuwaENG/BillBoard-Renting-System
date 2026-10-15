@@ -16,5 +16,10 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Several suites render real Supabase clients / Leaflet maps; the
+    // default multi-worker thread pool reliably OOMs on memory-constrained
+    // runners. A single fork is slower but deterministic.
+    pool: 'forks',
+    poolOptions: { forks: { singleFork: true } },
   },
 })
