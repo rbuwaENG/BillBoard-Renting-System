@@ -1,30 +1,9 @@
 import { supabase } from '@/lib/supabase'
+import { getFileKind, getFilename, type FileKind } from '@/lib/fileKind'
 
-export type CreativeKind = 'image' | 'video' | 'pdf' | 'other'
-
-const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'avif'])
-const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'webm', 'avi', 'mkv'])
-
-// Inferred from the stored path's filename — the storage path already
-// embeds the original filename (see uploadBookingCreative below), so no
-// separate "mime type" column is needed to tell renter/rentor what kind of
-// file was shared.
-export function getCreativeKind(path: string): CreativeKind {
-  const ext = path.split('.').pop()?.toLowerCase() ?? ''
-  if (IMAGE_EXTENSIONS.has(ext)) return 'image'
-  if (VIDEO_EXTENSIONS.has(ext)) return 'video'
-  if (ext === 'pdf') return 'pdf'
-  return 'other'
-}
-
-const UUID_PREFIX_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i
-
-export function getCreativeFilename(path: string): string {
-  const name = path.split('/').pop() ?? path
-  // Stored as `${uuid}-${originalFilename}` — strip the uuid prefix for
-  // display (a naive "first dash" split would cut inside the UUID itself).
-  return name.replace(UUID_PREFIX_RE, '')
-}
+export type CreativeKind = FileKind
+export const getCreativeKind = getFileKind
+export const getCreativeFilename = getFilename
 
 export async function uploadBookingCreative(
   file: File,

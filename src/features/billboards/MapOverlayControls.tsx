@@ -1,4 +1,4 @@
-import { FolderPlus, LocateFixed, Moon, SlidersHorizontal, Sun, X } from 'lucide-react'
+import { LocateFixed, Moon, ShoppingCart, SlidersHorizontal, Sun, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
@@ -124,12 +124,12 @@ function CampaignControl({ billboards }: { billboards: BillboardWithDetails[] })
   return (
     <div className="pointer-events-auto relative">
       <MapIconButton
-        title="Campaign draft"
+        title="Cart"
         active={open || draftIds.length > 0}
         onClick={handleToggleOpen}
         className="relative"
       >
-        <FolderPlus className="size-4" />
+        <ShoppingCart className="size-4" />
         {draftIds.length > 0 && (
           <span className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-accent font-mono text-[9px] text-paper">
             {draftIds.length}
@@ -140,7 +140,7 @@ function CampaignControl({ billboards }: { billboards: BillboardWithDetails[] })
       {open && (
         <div className="absolute top-0 right-full mr-2 w-72 space-y-3 border border-ink/10 bg-paper p-3 shadow-lg dark:border-paper/15 dark:bg-ink-soft">
           <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
-            Campaign draft
+            Cart
           </span>
 
           {draftBillboards.length === 0 ? (

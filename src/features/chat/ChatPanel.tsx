@@ -1,8 +1,10 @@
-import { ArrowLeft, Send } from 'lucide-react'
+import { ArrowLeft, Paperclip, Send, X } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import { ChatAttachmentBubble } from './ChatAttachmentBubble'
+import { uploadChatAttachment } from './chatAttachmentStorage'
 import { useChatMessages, useSendChatMessage } from './useChat'
 
 interface ChatPanelProps {
@@ -17,12 +19,29 @@ export function ChatPanel({ threadId, title, onBack }: ChatPanelProps) {
   const messages = data ?? []
   const sendMessage = useSendChatMessage()
   const [draft, setDraft] = useState('')
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
 
-  function handleSend() {
+  async function handleSend() {
     const body = draft.trim()
-    if (!body || !user) return
-    sendMessage.mutate({ threadId, senderId: user.uid, body })
+    if ((!body && !attachmentFile) || !user) return
+
+    let attachmentPath: string | undefined
+    if (attachmentFile) {
+      setUploading(true)
+      try {
+        attachmentPath = await uploadChatAttachment(attachmentFile, threadId)
+      } catch (err) {
+        console.error('Attachment upload failed:', err)
+        setUploading(false)
+        return
+      }
+      setUploading(false)
+    }
+
+    sendMessage.mutate({ threadId, senderId: user.uid, body, attachmentPath })
     setDraft('')
+    setAttachmentFile(null)
   }
 
   return (
@@ -56,20 +75,48 @@ export function ChatPanel({ threadId, title, onBack }: ChatPanelProps) {
             >
               <div
                 className={cn(
-                  'max-w-[80%] border px-3 py-2 text-sm',
+                  'max-w-[80%] space-y-1.5 border px-3 py-2 text-sm',
                   m.senderId === user?.uid
                     ? 'border-accent bg-accent text-paper'
                     : 'border-ink/15 bg-paper text-ink dark:border-paper/15 dark:bg-ink-soft dark:text-paper',
                 )}
               >
-                {m.body}
+                {m.attachmentPath && <ChatAttachmentBubble path={m.attachmentPath} />}
+                {m.body && <p>{m.body}</p>}
               </div>
             </div>
           ))
         )}
       </div>
 
+      {attachmentFile && (
+        <div className="mt-3 flex items-center gap-2 border border-ink/15 bg-paper-dim px-2 py-1.5 text-xs dark:border-paper/15 dark:bg-ink">
+          <Paperclip className="size-3.5 shrink-0 text-ink/50 dark:text-paper/50" />
+          <span className="min-w-0 flex-1 truncate">{attachmentFile.name}</span>
+          <button
+            type="button"
+            onClick={() => setAttachmentFile(null)}
+            title="Remove attachment"
+            className="shrink-0 text-ink/40 hover:text-brand-error dark:text-paper/40"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
+
       <div className="mt-3 flex gap-2">
+        <label
+          title="Attach an image, video, or file"
+          className="flex shrink-0 cursor-pointer items-center justify-center border border-ink/15 px-3 text-ink/60 hover:text-ink dark:border-paper/15 dark:text-paper/60 dark:hover:text-paper"
+        >
+          <Paperclip className="size-4" />
+          <input
+            type="file"
+            accept="image/*,video/*,application/pdf"
+            className="hidden"
+            onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)}
+          />
+        </label>
         <input
           type="text"
           value={draft}
@@ -80,8 +127,12 @@ export function ChatPanel({ threadId, title, onBack }: ChatPanelProps) {
           placeholder="Type a message…"
           className="w-full border border-ink/15 bg-transparent px-3 py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/15 dark:placeholder:text-paper/30"
         />
-        <Button onClick={handleSend} className="shrink-0 px-3">
-          <Send className="size-4" />
+        <Button
+          onClick={handleSend}
+          disabled={uploading || (!draft.trim() && !attachmentFile)}
+          className="shrink-0 px-3"
+        >
+          {uploading ? '…' : <Send className="size-4" />}
         </Button>
       </div>
     </div>

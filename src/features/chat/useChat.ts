@@ -16,6 +16,7 @@ export interface ChatMessage {
   threadId: string
   senderId: string
   body: string
+  attachmentPath: string | null
   createdAt: string
 }
 
@@ -32,6 +33,7 @@ interface ChatMessageRow {
   thread_id: string
   sender_id: string
   body: string
+  attachment_path: string | null
   created_at: string
 }
 
@@ -51,6 +53,7 @@ function toChatMessage(row: ChatMessageRow): ChatMessage {
     threadId: row.thread_id,
     senderId: row.sender_id,
     body: row.body,
+    attachmentPath: row.attachment_path,
     createdAt: row.created_at,
   }
 }
@@ -130,14 +133,19 @@ export function useSendChatMessage() {
       threadId,
       senderId,
       body,
+      attachmentPath,
     }: {
       threadId: string
       senderId: string
       body: string
+      attachmentPath?: string
     }) => {
-      const { error } = await supabase
-        .from('chat_messages')
-        .insert({ thread_id: threadId, sender_id: senderId, body })
+      const { error } = await supabase.from('chat_messages').insert({
+        thread_id: threadId,
+        sender_id: senderId,
+        body,
+        attachment_path: attachmentPath ?? null,
+      })
       if (error) throw error
     },
     onSuccess: (_data, vars) => {
