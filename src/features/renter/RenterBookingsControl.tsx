@@ -8,6 +8,7 @@ import { useMyChatThreads } from '@/features/chat/useChat'
 import { BookingsTab } from './BookingsTab'
 import { CampaignsTab } from './CampaignsTab'
 import { MessagesTab } from './MessagesTab'
+import { PaymentHistoryTab } from './PaymentHistoryTab'
 import { useMyBookings } from './useMyBookings'
 
 interface RenterBookingsControlProps {
@@ -35,6 +36,7 @@ export function RenterBookingsControl({
   const tabs = useMemo<TabItem[]>(
     () => [
       { key: 'bookings', label: 'Bookings' },
+      { key: 'payments', label: 'Payments' },
       {
         key: 'campaigns',
         label: draftCount > 0 ? `Campaigns (${draftCount})` : 'Campaigns',
@@ -89,6 +91,7 @@ export function RenterBookingsControl({
             {tab === 'bookings' && (
               <BookingsTab onSelectBillboard={onSelectBillboard} />
             )}
+            {tab === 'payments' && <PaymentHistoryTab />}
             {tab === 'campaigns' && (
               <CampaignsTab onSelectBillboard={onSelectBillboard} />
             )}

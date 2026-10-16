@@ -15,7 +15,7 @@ const ROLE_HOME: Record<UserRole, string> = {
 
 const SIGNUP_ROLES: { role: UserRole; label: string; hint: string }[] = [
   { role: 'renter', label: 'Renter', hint: 'Rent billboard space to advertise' },
-  { role: 'rentor', label: 'Rentor', hint: 'List and manage your own billboards' },
+  { role: 'rentor', label: 'Owner', hint: 'List and manage your own billboards' },
 ]
 
 const signupSchema = z.object({
@@ -97,7 +97,7 @@ export function SignupPage() {
             Put your board on the map.
           </h1>
           <p className="mt-4 max-w-xs text-sm text-paper/60">
-            Create an account as a Renter to book space, or a Rentor to list
+            Create an account as a Renter to book space, or an Owner to list
             your own billboards.
           </p>
         </div>

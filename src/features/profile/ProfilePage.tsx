@@ -39,7 +39,9 @@ export function ProfilePage() {
         <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
           Profile
         </h1>
-        <Badge variant="accent">{user.role}</Badge>
+        <Badge variant="accent">
+          {user.role === 'rentor' ? 'Owner' : user.role}
+        </Badge>
       </div>
       <p className="mt-1 text-sm text-ink/60 dark:text-paper/60">
         Manage your account details.

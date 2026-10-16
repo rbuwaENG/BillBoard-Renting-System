@@ -5,6 +5,7 @@ import type { RentorBookingRequest } from './useRentorBookings'
 import { BookingInboxPanel } from './BookingInboxPanel'
 import * as useRentorBookingsModule from './useRentorBookings'
 import * as useCurrencySettingModule from '@/features/admin/useCurrencySetting'
+import * as bookingsModule from '@/features/bookings'
 
 // useRentorBookings.ts (via useAuth) imports the real Supabase client, which
 // opens a background auth listener — mock it out so this test doesn't spin
@@ -36,6 +37,16 @@ function setup(mutate: ReturnType<typeof vi.fn>) {
   vi.spyOn(useCurrencySettingModule, 'useFormatPrice').mockReturnValue(
     (amount: number) => `$${amount}`,
   )
+  // BookingDetailsDisclosure (the collapsible timeline/documents section) calls
+  // these unconditionally, independent of its open/closed state.
+  vi.spyOn(bookingsModule, 'useBookingEvents').mockReturnValue({
+    data: [],
+  } as unknown as ReturnType<typeof bookingsModule.useBookingEvents>)
+  vi.spyOn(bookingsModule, 'useRequestBookingDocuments').mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    isError: false,
+  } as unknown as ReturnType<typeof bookingsModule.useRequestBookingDocuments>)
 }
 
 describe('BookingInboxPanel', () => {

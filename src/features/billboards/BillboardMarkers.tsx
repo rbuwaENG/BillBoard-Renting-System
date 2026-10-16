@@ -85,7 +85,7 @@ export function BillboardMarkers({
                 onClick={() => onViewDetails(billboard.id)}
                 className="min-w-40 cursor-pointer text-left font-display"
               >
-                <span className="font-mono text-[10px] tracking-widest text-accent uppercase">
+                <span className="inline-block bg-ink px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-widest text-paper uppercase dark:bg-paper dark:text-ink">
                   {billboard.category}
                 </span>
                 <h3 className="mt-0.5 text-sm font-semibold tracking-tight text-ink dark:text-paper">

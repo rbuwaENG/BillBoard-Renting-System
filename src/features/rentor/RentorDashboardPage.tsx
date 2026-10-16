@@ -31,7 +31,7 @@ export function RentorDashboardPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
       <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-        Rentor dashboard
+        Owner dashboard
       </h1>
       <p className="mt-1 text-sm text-ink/60 dark:text-paper/60">
         Manage your billboards and review booking requests from here.

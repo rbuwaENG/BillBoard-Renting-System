@@ -1,46 +1,13 @@
-import { ShoppingCart } from 'lucide-react'
 import { useEffect } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 import { BillboardMark, Button } from '@/components'
 import { useCurrencySetting } from '@/features/admin/useCurrencySetting'
-import { useCampaignStore } from '@/features/campaigns/campaignStore'
-import { useMapPopoverStore } from '@/features/billboards/mapPopoverStore'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 import { useAuth, useAuthStore } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import type { UserRole } from '@/types'
 
 const DEFAULT_SITE_NAME = 'Billboard Renting System'
-
-// Persistent cart entry point — the map's own cart icon only exists on the
-// browse page, so renters need a way to reach their draft from anywhere.
-function CartButton() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const draftCount = useCampaignStore((s) => s.draftIds.length)
-  const togglePopover = useMapPopoverStore((s) => s.toggle)
-
-  function handleClick() {
-    togglePopover('campaign')
-    if (location.pathname !== '/') navigate('/')
-  }
-
-  return (
-    <button
-      type="button"
-      title="Cart"
-      onClick={handleClick}
-      className="relative text-ink/60 hover:text-ink dark:text-paper/60 dark:hover:text-paper"
-    >
-      <ShoppingCart className="size-5" />
-      {draftCount > 0 && (
-        <span className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-accent font-mono text-[9px] text-paper">
-          {draftCount}
-        </span>
-      )}
-    </button>
-  )
-}
 
 interface NavLinkDef {
   to: string
@@ -51,7 +18,7 @@ interface NavLinkDef {
 
 const NAV_LINKS: NavLinkDef[] = [
   { to: '/', label: 'Browse', end: true },
-  { to: '/rentor', label: 'Rentor', roles: ['rentor'] },
+  { to: '/rentor', label: 'Owner', roles: ['rentor'] },
   { to: '/admin', label: 'Admin', roles: ['admin'] },
 ]
 
@@ -110,7 +77,6 @@ export function RootLayout() {
 
           {user ? (
             <div className="flex items-center gap-3">
-              {role === 'renter' && <CartButton />}
               <NotificationBell />
               <NavLink
                 to="/profile"

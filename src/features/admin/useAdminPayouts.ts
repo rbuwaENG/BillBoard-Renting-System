@@ -53,7 +53,7 @@ export function usePayableBookings() {
       for (const row of eligible) {
         const group = groups.get(row.owner_id) ?? {
           ownerId: row.owner_id,
-          ownerName: row.profiles?.display_name ?? 'Rentor',
+          ownerName: row.profiles?.display_name ?? 'Owner',
           bookings: [],
           total: 0,
         }
@@ -111,7 +111,7 @@ export function useAdminPayouts() {
         (row): AdminPayout => ({
           id: row.id,
           ownerId: row.owner_id,
-          ownerName: row.profiles?.display_name ?? 'Rentor',
+          ownerName: row.profiles?.display_name ?? 'Owner',
           amount: row.amount,
           grossAmount: row.gross_amount,
           feeAmount: row.fee_amount,

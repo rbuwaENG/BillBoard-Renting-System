@@ -1,10 +1,37 @@
-import { Bell } from 'lucide-react'
+import {
+  Bell,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  FileText,
+  MessageCircle,
+  Star,
+  Wallet,
+  XCircle,
+  type LucideIcon,
+} from 'lucide-react'
 import { useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import {
   useMarkNotificationsRead,
   useMyNotifications,
 } from './useNotifications'
+
+const TYPE_ICON: Record<string, LucideIcon> = {
+  booking_requested: Calendar,
+  booking_approved: CheckCircle2,
+  booking_rejected: XCircle,
+  payment_confirmed: CreditCard,
+  booking_completed: CheckCircle2,
+  booking_cancelled: XCircle,
+  review_received: Star,
+  payout_released: Wallet,
+  new_message: MessageCircle,
+  documents_requested: FileText,
+  payment_reminder: Clock,
+  rental_starting_soon: Calendar,
+}
 
 function timeAgo(iso: string) {
   const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
@@ -62,20 +89,26 @@ export function NotificationBell() {
               </p>
             ) : (
               <ul className="divide-y divide-ink/10 dark:divide-paper/10">
-                {notifications.map((n) => (
-                  <li
-                    key={n.id}
-                    className={cn(
-                      'p-3 text-sm',
-                      !n.read && 'bg-accent/5',
-                    )}
-                  >
-                    <p className="text-ink dark:text-paper">{n.message}</p>
-                    <p className="mt-1 font-mono text-[10px] tracking-wide text-ink/40 uppercase dark:text-paper/40">
-                      {timeAgo(n.createdAt)}
-                    </p>
-                  </li>
-                ))}
+                {notifications.map((n) => {
+                  const Icon = TYPE_ICON[n.type] ?? Bell
+                  return (
+                    <li
+                      key={n.id}
+                      className={cn(
+                        'flex gap-2.5 p-3 text-sm',
+                        !n.read && 'bg-accent/5',
+                      )}
+                    >
+                      <Icon className="mt-0.5 size-3.5 shrink-0 text-ink/40 dark:text-paper/40" />
+                      <div className="min-w-0">
+                        <p className="text-ink dark:text-paper">{n.message}</p>
+                        <p className="mt-1 font-mono text-[10px] tracking-wide text-ink/40 uppercase dark:text-paper/40">
+                          {timeAgo(n.createdAt)}
+                        </p>
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>

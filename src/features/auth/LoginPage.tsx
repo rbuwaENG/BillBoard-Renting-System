@@ -60,7 +60,7 @@ export function LoginPage() {
             Every board has an owner.
           </h1>
           <p className="mt-4 max-w-xs text-sm text-paper/60">
-            Rentors list the space. Renters book it. One account, one login.
+            Owners list the space. Renters book it. One account, one login.
           </p>
         </div>
 

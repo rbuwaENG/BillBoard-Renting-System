@@ -54,6 +54,9 @@ export function BillboardBrowsePage() {
     new Set(),
   )
   const [selectedSizes, setSelectedSizes] = useState<Set<string>>(new Set())
+  const [selectedDistricts, setSelectedDistricts] = useState<Set<string>>(
+    new Set(),
+  )
   const [priceMax, setPriceMax] = useState<number | null>(null)
   const [myBillboardsActive, setMyBillboardsActive] = useState(false)
   const [nearMeActive, setNearMeActive] = useState(false)
@@ -76,6 +79,17 @@ export function BillboardBrowsePage() {
   )
   const SIZES = useMemo(
     () => Array.from(new Set(billboards.map((b) => b.size))),
+    [billboards],
+  )
+  const DISTRICTS = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          billboards
+            .map((b) => b.district)
+            .filter((d): d is string => Boolean(d)),
+        ),
+      ).sort(),
     [billboards],
   )
   const PRICE_BOUNDS = useMemo((): [number, number] => {
@@ -117,6 +131,15 @@ export function BillboardBrowsePage() {
     })
   }
 
+  function toggleDistrict(district: string) {
+    setSelectedDistricts((prev) => {
+      const next = new Set(prev)
+      if (next.has(district)) next.delete(district)
+      else next.add(district)
+      return next
+    })
+  }
+
   function handleLocateMe() {
     setNearMeActive(true)
     setRelocateTrigger((t) => t + 1)
@@ -138,6 +161,11 @@ export function BillboardBrowsePage() {
     if (selectedSizes.size > 0) {
       list = list.filter((b) => selectedSizes.has(b.size))
     }
+    if (selectedDistricts.size > 0) {
+      list = list.filter(
+        (b) => b.district !== null && selectedDistricts.has(b.district),
+      )
+    }
     list = list.filter((b) => b.pricePerDay <= effectivePriceMax)
     if (myBillboardsActive) {
       list = list.filter((b) => myBillboardIds.has(b.id))
@@ -148,6 +176,7 @@ export function BillboardBrowsePage() {
     query,
     selectedCategories,
     selectedSizes,
+    selectedDistricts,
     effectivePriceMax,
     myBillboardsActive,
     myBillboardIds,
@@ -224,6 +253,9 @@ export function BillboardBrowsePage() {
         sizes={SIZES}
         selectedSizes={selectedSizes}
         onToggleSize={toggleSize}
+        districts={DISTRICTS}
+        selectedDistricts={selectedDistricts}
+        onToggleDistrict={toggleDistrict}
         priceBounds={PRICE_BOUNDS}
         priceMax={effectivePriceMax}
         onPriceMaxChange={setPriceMax}

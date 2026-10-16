@@ -20,6 +20,9 @@ interface MapOverlayControlsProps {
   sizes: string[]
   selectedSizes: Set<string>
   onToggleSize: (size: string) => void
+  districts: string[]
+  selectedDistricts: Set<string>
+  onToggleDistrict: (district: string) => void
   priceBounds: [number, number]
   priceMax: number
   onPriceMaxChange: (price: number) => void
@@ -232,6 +235,9 @@ export function MapOverlayControls({
   sizes,
   selectedSizes,
   onToggleSize,
+  districts,
+  selectedDistricts,
+  onToggleDistrict,
   priceBounds,
   priceMax,
   onPriceMaxChange,
@@ -275,11 +281,12 @@ export function MapOverlayControls({
 
       <div className="pointer-events-auto relative">
         <MapIconButton
-          title="Filter by category, size & price"
+          title="Filter by category, size, district & price"
           active={
             filtersOpen ||
             selectedCategories.size > 0 ||
             selectedSizes.size > 0 ||
+            selectedDistricts.size > 0 ||
             priceMax < priceCeil
           }
           onClick={() => togglePopover('filters')}
@@ -322,6 +329,25 @@ export function MapOverlayControls({
                 ))}
               </div>
             </div>
+
+            {districts.length > 0 && (
+              <div className="border-t border-dashed border-ink/15 pt-3 dark:border-paper/15">
+                <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
+                  District
+                </span>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {districts.map((district) => (
+                    <ChipButton
+                      key={district}
+                      active={selectedDistricts.has(district)}
+                      onClick={() => onToggleDistrict(district)}
+                    >
+                      {district}
+                    </ChipButton>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="border-t border-dashed border-ink/15 pt-3 dark:border-paper/15">
               <div className="flex items-center justify-between">
@@ -412,7 +438,7 @@ export function MapOverlayControls({
               <input
                 type="range"
                 min={10}
-                max={1000}
+                max={400}
                 step={10}
                 value={radiusKm}
                 onChange={(e) => onRadiusChange(Number(e.target.value))}

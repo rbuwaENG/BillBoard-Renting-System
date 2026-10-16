@@ -2,7 +2,7 @@ import { Badge } from '@/components'
 import { cn } from '@/lib/utils'
 import type { BookingStatus } from '@/types'
 
-const STATUS_LABEL: Record<BookingStatus, string> = {
+export const STATUS_LABEL: Record<BookingStatus, string> = {
   pending_owner_review: 'Pending review',
   approved: 'Approved',
   rejected: 'Rejected',

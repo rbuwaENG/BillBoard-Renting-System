@@ -128,7 +128,8 @@ export function BookingsTab({ onSelectBillboard }: BookingsTabProps) {
                         : 'Pay now'}
                     </Button>
                   )}
-                  {booking.status === 'completed' &&
+                  {booking.status !== 'rejected' &&
+                    booking.status !== 'cancelled' &&
                     (booking.review ? (
                       <span className="flex items-center gap-1 font-mono text-xs text-ink/50 dark:text-paper/50">
                         <Star className="size-3.5 fill-accent text-accent" />
@@ -138,6 +139,12 @@ export function BookingsTab({ onSelectBillboard }: BookingsTabProps) {
                       <Button
                         variant="secondary"
                         size="sm"
+                        disabled={booking.status !== 'completed'}
+                        title={
+                          booking.status !== 'completed'
+                            ? 'Available once this booking is marked completed'
+                            : undefined
+                        }
                         onClick={() =>
                           setReviewingBooking({
                             id: booking.id,
