@@ -39,8 +39,9 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
     .map((id) => billboards.find((b) => b.id === id))
     .filter((b): b is BillboardWithDetails => Boolean(b))
 
+  const datesInvalid = !!startDate && !!endDate && endDate < startDate
   const draftDays =
-    startDate && endDate
+    startDate && endDate && !datesInvalid
       ? Math.max(
           1,
           Math.round(
@@ -53,7 +54,13 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
     draftBillboards.reduce((sum, b) => sum + b.pricePerDay, 0) * draftDays
 
   async function handleCreate() {
-    if (!name.trim() || !startDate || !endDate || draftBillboards.length === 0)
+    if (
+      !name.trim() ||
+      !startDate ||
+      !endDate ||
+      datesInvalid ||
+      draftBillboards.length === 0
+    )
       return
     try {
       await createCampaign.mutateAsync({
@@ -131,10 +138,16 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
             <input
               type="date"
               value={endDate}
+              min={startDate || undefined}
               onChange={(e) => setEndDate(e.target.value)}
               className="w-1/2 border border-ink/15 bg-transparent px-2 py-1.5 text-xs focus:border-accent focus:outline-none dark:border-paper/15"
             />
           </div>
+          {datesInvalid && (
+            <p className="text-xs text-brand-error">
+              End date must be on or after the start date.
+            </p>
+          )}
           {draftDays > 0 && draftBillboards.length > 0 && (
             <p className="text-right font-mono text-xs text-accent">
               Est. total {formatPrice(draftTotal)}
@@ -151,6 +164,7 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
               !name.trim() ||
               !startDate ||
               !endDate ||
+              datesInvalid ||
               draftBillboards.length === 0 ||
               createCampaign.isPending
             }

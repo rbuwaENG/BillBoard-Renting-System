@@ -216,6 +216,7 @@ function RequestBookingForm({
           <input
             type="date"
             value={endDate}
+            min={startDate || undefined}
             onChange={(e) => setEndDate(e.target.value)}
             className="w-full border-b border-ink/20 bg-transparent py-1.5 text-sm focus:border-accent focus:outline-none dark:border-paper/20"
           />
