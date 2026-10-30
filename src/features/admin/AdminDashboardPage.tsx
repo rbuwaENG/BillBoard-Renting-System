@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Tabs, type TabItem } from '@/components'
 import { useAdvanceBookingLifecycle } from '@/hooks/useAdvanceBookingLifecycle'
 import { AnalyticsPanel } from './AnalyticsPanel'
+import { BookingsPanel } from './BookingsPanel'
 import { ModerationPanel } from './ModerationPanel'
 import { PaymentsPanel } from './PaymentsPanel'
 import { PayoutsPanel } from './PayoutsPanel'
@@ -13,6 +14,7 @@ const TABS: TabItem[] = [
   { key: 'analytics', label: 'Analytics' },
   { key: 'users', label: 'Users' },
   { key: 'moderation', label: 'Moderation' },
+  { key: 'bookings', label: 'Bookings' },
   { key: 'payments', label: 'Payments' },
   { key: 'payouts', label: 'Payouts' },
   { key: 'taxonomy', label: 'Taxonomy' },
@@ -40,6 +42,7 @@ export function AdminDashboardPage() {
         {tab === 'analytics' && <AnalyticsPanel />}
         {tab === 'users' && <UsersPanel />}
         {tab === 'moderation' && <ModerationPanel />}
+        {tab === 'bookings' && <BookingsPanel />}
         {tab === 'payments' && <PaymentsPanel />}
         {tab === 'payouts' && <PayoutsPanel />}
         {tab === 'taxonomy' && <TaxonomyPanel />}

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Booking } from '@/types'
+import { usePagedQuery } from './usePagedQuery'
 
 interface BookingRow {
   id: string
@@ -36,6 +37,41 @@ function toBooking(row: BookingRow): Booking {
     updatedAt: row.updated_at,
     decisionAt: row.decision_at ?? undefined,
   }
+}
+
+export interface AdminBookingRow extends Booking {
+  billboardTitle: string
+  renterName: string
+  ownerName: string
+}
+
+interface JoinedBookingRow extends BookingRow {
+  billboards: { title: string } | null
+  renter: { display_name: string } | null
+  owner: { display_name: string } | null
+}
+
+// Paged ("Load more") bookings table for the Bookings tab, newest first.
+export function useAdminBookingsPaged() {
+  return usePagedQuery(['admin-bookings', 'paged'], async (from, to) => {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select(
+        '*, billboards(title), renter:profiles!bookings_renter_id_fkey(display_name), ' +
+          'owner:profiles!bookings_owner_id_fkey(display_name)',
+      )
+      .order('created_at', { ascending: false })
+      .range(from, to)
+    if (error) throw error
+    return (data as unknown as JoinedBookingRow[]).map(
+      (row): AdminBookingRow => ({
+        ...toBooking(row),
+        billboardTitle: row.billboards?.title ?? 'Billboard',
+        renterName: row.renter?.display_name ?? 'Renter',
+        ownerName: row.owner?.display_name ?? 'Owner',
+      }),
+    )
+  })
 }
 
 // Platform-wide bookings for the Admin analytics dashboard — RLS allows an
