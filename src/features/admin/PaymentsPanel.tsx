@@ -20,6 +20,8 @@ import {
   useConfirmPayment,
   usePendingSubmissions,
   useRejectPayment,
+  useUnverifiedPayments,
+  useVerifyPayment,
   type AdminPayment,
   type AwaitingPaymentBooking,
 } from './useAdminPayments'
@@ -329,6 +331,124 @@ function AwaitingBookingCard({ booking }: { booking: AwaitingPaymentBooking }) {
   )
 }
 
+function UnverifiedPaymentCard({
+  payment,
+  onVerify,
+}: {
+  payment: AdminPayment
+  onVerify: (payment: AdminPayment) => void
+}) {
+  const formatPrice = useFormatPrice()
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-display text-sm font-semibold tracking-tight">
+            {payment.billboardTitle}
+          </p>
+          <BookingMeta
+            renterName={payment.renterName}
+            startDate={payment.startDate}
+            endDate={payment.endDate}
+            ageLabel={`recorded ${formatAge(payment.createdAt)}`}
+          />
+          {payment.reference && (
+            <p className="mt-0.5 text-xs text-ink/60 dark:text-paper/60">
+              Reference: <span className="font-mono">{payment.reference}</span>
+            </p>
+          )}
+        </div>
+        <span className="font-mono text-sm font-semibold text-accent">
+          {formatPrice(payment.amount)}
+        </span>
+      </div>
+      <Button
+        size="sm"
+        variant="secondary"
+        className="mt-3"
+        onClick={() => onVerify(payment)}
+      >
+        Verify
+      </Button>
+    </Card>
+  )
+}
+
+function VerifyPaymentDialog({
+  payment,
+  onClose,
+}: {
+  payment: AdminPayment | null
+  onClose: () => void
+}) {
+  const formatPrice = useFormatPrice()
+  const verifyPayment = useVerifyPayment()
+
+  return (
+    <ConfirmDialog
+      open={payment !== null}
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+      title="Verify payment"
+      description={
+        payment
+          ? `Confirm that ${formatPrice(payment.amount)} from ${payment.renterName} for ${payment.billboardTitle} was actually received. Once verified, the booking can be included in an owner payout.`
+          : undefined
+      }
+      confirmLabel="Verify payment"
+      onConfirm={async () => {
+        if (!payment) return
+        await verifyPayment.mutateAsync(payment.id)
+      }}
+    />
+  )
+}
+
+// Hidden entirely when there is nothing to verify (the normal state once the
+// legacy payments have been worked through).
+function UnverifiedPayments({ search }: { search: string }) {
+  const unverified = useUnverifiedPayments()
+  const [verifying, setVerifying] = useState<AdminPayment | null>(null)
+
+  if (unverified.isLoading || unverified.error) return null
+  if (unverified.items.length === 0) return null
+
+  const rows = unverified.items.filter((p) =>
+    matchesSearch(search, p.billboardTitle, p.renterName, p.reference),
+  )
+
+  return (
+    <section className="space-y-3" aria-label="Unverified legacy payments">
+      <SectionHeading title="Unverified legacy payments" count={rows.length} />
+      <p className="text-xs text-ink/60 dark:text-paper/60">
+        These payments were marked paid by the renter before admin confirmation
+        existed. Verify each one you have actually received — they can't be paid
+        out to owners until then.
+      </p>
+      {rows.length === 0 && (
+        <EmptyState>No unverified payments match your search.</EmptyState>
+      )}
+      {rows.map((p) => (
+        <UnverifiedPaymentCard key={p.id} payment={p} onVerify={setVerifying} />
+      ))}
+      {unverified.hasNextPage && (
+        <LoadMore
+          hasNextPage={unverified.hasNextPage}
+          isFetchingNextPage={unverified.isFetchingNextPage}
+          onLoadMore={() => unverified.fetchNextPage()}
+          loadedCount={unverified.items.length}
+        />
+      )}
+      <VerifyPaymentDialog
+        payment={verifying}
+        onClose={() => setVerifying(null)}
+      />
+    </section>
+  )
+}
+
 function buildPaymentsCsv(rows: AdminPayment[]) {
   return toCsv(rows, [
     { header: 'Payment ID', value: (p) => p.id },
@@ -546,6 +666,8 @@ export function PaymentsPanel() {
           </>
         )}
       </section>
+
+      <UnverifiedPayments search={search} />
 
       <PaymentHistory />
 

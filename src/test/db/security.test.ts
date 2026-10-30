@@ -58,6 +58,7 @@ const ANON_FUNCTIONS = [
   'get_billboard_booked_ranges(uuid)', // 0032
   'is_active_user()',
   'is_admin()',
+  'is_profile_active(uuid)', // 0035
 ]
 const AUTHENTICATED_FUNCTIONS = [
   ...ANON_FUNCTIONS,
@@ -71,6 +72,7 @@ const AUTHENTICATED_FUNCTIONS = [
   'admin_reject_payment(uuid,text)', // 0031
   'admin_release_payout(uuid)',
   'admin_set_billboard_status(uuid,text,text)',
+  'admin_verify_payment(uuid)', // 0035
   'advance_booking_lifecycle()',
   'assert_active_user()',
   'attach_booking_creative(uuid,text)',
@@ -861,12 +863,22 @@ describe('storage (0029)', () => {
     expect(Number(byId['billboard-images'].file_size_limit)).toBe(
       5 * 1024 * 1024,
     )
-    expect(byId['billboard-images'].allowed_mime_types).toEqual(['image/*'])
+    // Explicit lists since 0035 (no wildcard, so no image/svg+xml).
+    const images = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/gif',
+      'image/avif',
+    ]
+    expect(byId['billboard-images'].allowed_mime_types).toEqual(images)
     for (const id of ['booking-creatives', 'chat-attachments']) {
       expect(Number(byId[id].file_size_limit)).toBe(10 * 1024 * 1024)
       expect(byId[id].allowed_mime_types).toEqual([
-        'image/*',
-        'video/*',
+        ...images,
+        'video/mp4',
+        'video/webm',
+        'video/quicktime',
         'application/pdf',
       ])
     }
