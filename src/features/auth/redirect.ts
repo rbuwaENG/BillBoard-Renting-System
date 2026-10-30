@@ -12,6 +12,9 @@ export function sanitizeNext(next: string | null | undefined): string | null {
     const url = new URL(next, base)
     if (url.origin !== base) return null
     const path = `${url.pathname}${url.search}${url.hash}`
+    // Dot segments can normalise into a protocol-relative path
+    // ('/..//evil.com' → '//evil.com'), so re-check after resolving.
+    if (path.startsWith('//') || path.startsWith('/\\')) return null
     // Don't bounce back into the auth screens themselves.
     if (/^\/(login|signup|forgot-password|reset-password)(\/|$|\?)/.test(path))
       return null

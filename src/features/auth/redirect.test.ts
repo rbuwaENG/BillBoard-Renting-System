@@ -28,8 +28,22 @@ describe('sanitizeNext', () => {
     '/login?next=/x',
     '/signup',
     '/reset-password',
+    // Dot segments that normalise into a protocol-relative path.
+    '/..//evil.com',
+    '/.//evil.com',
+    '/a/../..//evil.com/x',
+    '/./\\evil.com',
+    '/../\\evil.com',
   ])('rejects %j', (input) => {
     expect(sanitizeNext(input as string | null | undefined)).toBeNull()
+  })
+})
+
+describe('sanitizeNext — encoded slashes', () => {
+  it('keeps percent-encoded slashes encoded, so they never form //host', () => {
+    const result = sanitizeNext('/%2F%2Fevil.com')
+    expect(result).toBe('/%2F%2Fevil.com')
+    expect(result!.startsWith('//')).toBe(false)
   })
 })
 

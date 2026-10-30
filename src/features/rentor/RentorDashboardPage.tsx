@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Tabs, type TabItem } from '@/components'
 import { useAdvanceBookingLifecycle } from '@/hooks/useAdvanceBookingLifecycle'
 import { BookingInboxPanel } from './BookingInboxPanel'
@@ -7,9 +8,35 @@ import { MessagesPanel } from './MessagesPanel'
 import { MyBillboardsPanel } from './MyBillboardsPanel'
 import { useOwnerBookings } from './useRentorBookings'
 
+const TAB_KEYS = new Set(['billboards', 'bookings', 'messages', 'earnings'])
+
+// The active tab lives in the URL (`?tab=`), and notification links
+// (`/rentor?booking=<id>`) open the Bookings tab focused on that booking —
+// also when the dashboard is already open, since only the params change.
 export function RentorDashboardPage() {
   useAdvanceBookingLifecycle()
-  const [tab, setTab] = useState('billboards')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const focusBookingId = searchParams.get('booking')
+  const tabParam = searchParams.get('tab')
+  const tab =
+    tabParam && TAB_KEYS.has(tabParam)
+      ? tabParam
+      : focusBookingId
+        ? 'bookings'
+        : 'billboards'
+
+  function setTab(key: string) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('tab', key)
+        // Leaving the focused booking behind once the owner moves on.
+        if (key !== 'bookings') next.delete('booking')
+        return next
+      },
+      { replace: true },
+    )
+  }
   const { data } = useOwnerBookings()
   const pendingCount = (data ?? []).filter(
     (r) => r.status === 'pending_owner_review',
@@ -43,7 +70,9 @@ export function RentorDashboardPage() {
 
       <div className="mt-6">
         {tab === 'billboards' && <MyBillboardsPanel />}
-        {tab === 'bookings' && <BookingInboxPanel />}
+        {tab === 'bookings' && (
+          <BookingInboxPanel focusBookingId={focusBookingId} />
+        )}
         {tab === 'messages' && <MessagesPanel />}
         {tab === 'earnings' && <EarningsPanel />}
       </div>

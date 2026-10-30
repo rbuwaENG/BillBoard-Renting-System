@@ -25,6 +25,7 @@ function makeBillboard(overrides: Partial<RentorBillboard>): RentorBillboard {
     adminPriceOverridePerDay: null,
     images: [],
     status: 'active',
+    statusLockedByAdmin: false,
     district: null,
     trafficLevel: null,
     rating: { avg: 0, count: 0 },
@@ -150,6 +151,49 @@ describe('MyBillboardsPanel', () => {
       screen.queryByRole('button', { name: /activate riverside board/i }),
     ).not.toBeInTheDocument()
     expect(screen.getByText(/flagged by an admin/i)).toBeInTheDocument()
+  })
+
+  it('disables status changes and delete on admin-locked listings', () => {
+    setup([
+      makeBillboard({ status: 'inactive', statusLockedByAdmin: true }),
+      makeBillboard({
+        id: 'b2',
+        title: 'Old Board',
+        status: 'archived',
+        statusLockedByAdmin: true,
+      }),
+    ])
+
+    expect(
+      screen.getByRole('button', { name: /activate riverside board/i }),
+    ).toBeDisabled()
+    expect(
+      screen.getByRole('button', {
+        name: /archive or delete riverside board/i,
+      }),
+    ).toBeDisabled()
+    expect(
+      screen.getByText(/status set by an admin — contact support/i),
+    ).toBeInTheDocument()
+    // Edit (non-status fields) stays available.
+    expect(
+      screen.getByRole('button', { name: /edit riverside board/i }),
+    ).toBeEnabled()
+
+    fireEvent.click(screen.getByLabelText(/show archived/i))
+    expect(screen.getByRole('button', { name: /unarchive/i })).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: /^delete old board/i }),
+    ).toBeDisabled()
+  })
+
+  it('does not offer delete on flagged listings', () => {
+    setup([makeBillboard({ status: 'flagged' })])
+    expect(
+      screen.getByRole('button', {
+        name: /archive or delete riverside board/i,
+      }),
+    ).toBeDisabled()
   })
 
   it('shows the admin price override on the listing row', () => {

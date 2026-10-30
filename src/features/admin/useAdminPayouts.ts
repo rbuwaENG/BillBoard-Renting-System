@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { Booking, PayoutStatus } from '@/types'
@@ -54,30 +55,36 @@ export function usePayableBookings() {
   return useQuery({
     queryKey: queryKeys.adminPayableBookings,
     queryFn: async (): Promise<PayableOwnerGroup[]> => {
-      const [
-        { data: bookings, error: bookingsError },
-        { data: payoutItems, error: payoutItemsError },
-      ] = await Promise.all([
-        supabase
-          .from('bookings')
-          .select(
-            'id, owner_id, price_quoted, status, billboards(title), profiles!bookings_owner_id_fkey(display_name), ' +
-              'payments!payments_booking_id_fkey(status, confirmed_by)',
-          )
-          .in('status', PAYABLE_STATUSES),
-        supabase.from('payout_items').select('booking_id, payouts(status)'),
+      // Both lists grow without bound — page past PostgREST's 1000-row cap.
+      const [bookings, payoutItems] = await Promise.all([
+        fetchAllRows<PayableBookingRow>((from, to) =>
+          supabase
+            .from('bookings')
+            .select(
+              'id, owner_id, price_quoted, status, billboards(title), profiles!bookings_owner_id_fkey(display_name), ' +
+                'payments!payments_booking_id_fkey(status, confirmed_by)',
+            )
+            .in('status', PAYABLE_STATUSES)
+            .order('id', { ascending: true })
+            .range(from, to),
+        ),
+        fetchAllRows<PayoutItemRow>((from, to) =>
+          supabase
+            .from('payout_items')
+            .select('booking_id, payouts(status)')
+            .order('booking_id', { ascending: true })
+            .range(from, to),
+        ),
       ])
-      if (bookingsError) throw bookingsError
-      if (payoutItemsError) throw payoutItemsError
 
       const paidOutIds = new Set(
-        ((payoutItems ?? []) as unknown as PayoutItemRow[])
+        payoutItems
           .filter((p) => p.payouts?.status !== 'cancelled')
           .map((p) => p.booking_id),
       )
-      const eligible = (
-        (bookings ?? []) as unknown as PayableBookingRow[]
-      ).filter((b) => !paidOutIds.has(b.id) && hasConfirmedPayment(b))
+      const eligible = bookings.filter(
+        (b) => !paidOutIds.has(b.id) && hasConfirmedPayment(b),
+      )
 
       const groups = new Map<string, PayableOwnerGroup>()
       for (const row of eligible) {
@@ -132,12 +139,15 @@ export function useAdminPayouts() {
   return useQuery({
     queryKey: queryKeys.adminPayouts,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('payouts')
-        .select('*, profiles!payouts_owner_id_fkey(display_name)')
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return (data as unknown as PayoutRow[]).map((row): AdminPayout => ({
+      const rows = await fetchAllRows<PayoutRow>((from, to) =>
+        supabase
+          .from('payouts')
+          .select('*, profiles!payouts_owner_id_fkey(display_name)')
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to),
+      )
+      return rows.map((row): AdminPayout => ({
         id: row.id,
         ownerId: row.owner_id,
         ownerName: row.profiles?.display_name ?? 'Owner',

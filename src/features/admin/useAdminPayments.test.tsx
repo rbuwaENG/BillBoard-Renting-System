@@ -127,6 +127,7 @@ describe('usePendingSubmissions', () => {
 
     expect(supabase.from).toHaveBeenCalledWith('payments')
     expect(builder.eq).toHaveBeenCalledWith('status', 'pending')
+    expect(builder.order).toHaveBeenCalledWith('id', { ascending: true })
     expect(builder.range).toHaveBeenCalledWith(0, 49)
     expect(result.current.items).toEqual([
       expect.objectContaining({
@@ -145,7 +146,7 @@ describe('usePendingSubmissions', () => {
 })
 
 describe('useAwaitingPaymentBookings', () => {
-  it('only lists payment_pending bookings with no open (pending/succeeded) payment', async () => {
+  it('filters payment_pending bookings without an open payment in SQL, so paging stays intact', async () => {
     const base = {
       price_quoted: 300,
       start_date: '2026-11-01',
@@ -155,15 +156,13 @@ describe('useAwaitingPaymentBookings', () => {
       billboards: { title: 'Board' },
       profiles: { display_name: 'Renter' },
     }
-    const builder = pagedBuilder([
-      { ...base, id: 'no-payment', payments: [] },
-      {
-        ...base,
-        id: 'rejected-before',
-        payments: [{ id: 'p1', status: 'failed' }],
-      },
-      { ...base, id: 'submitted', payments: [{ id: 'p2', status: 'pending' }] },
-    ])
+    // A full page from the server: every row must be kept so "Load more"
+    // still offers the next page.
+    const page = Array.from({ length: 50 }, (_, i) => ({
+      ...base,
+      id: `bk-${i}`,
+    }))
+    const builder = pagedBuilder(page)
     vi.mocked(supabase.from).mockReturnValueOnce(builder as never)
 
     const { result } = renderHook(() => useAwaitingPaymentBookings(), {
@@ -171,12 +170,20 @@ describe('useAwaitingPaymentBookings', () => {
     })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
+    expect(supabase.from).toHaveBeenCalledWith('bookings')
     expect(builder.eq).toHaveBeenCalledWith('status', 'payment_pending')
-    expect(result.current.items.map((b) => b.id)).toEqual([
-      'no-payment',
-      'rejected-before',
-    ])
-    expect(result.current.items[0].approvedAt).toBe('2026-10-21T00:00:00Z')
+    expect(builder.is).toHaveBeenCalledWith('payment_id', null)
+    expect(builder.order).toHaveBeenCalledWith('created_at', {
+      ascending: true,
+    })
+    expect(builder.order).toHaveBeenCalledWith('id', { ascending: true })
+    expect(builder.range).toHaveBeenCalledWith(0, 49)
+    expect(result.current.items).toHaveLength(50)
+    expect(result.current.items[0]).toMatchObject({
+      id: 'bk-0',
+      approvedAt: '2026-10-21T00:00:00Z',
+    })
+    expect(result.current.hasNextPage).toBe(true)
   })
 })
 
@@ -194,6 +201,9 @@ describe('useSucceededPaymentsTotal', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(builder.eq).toHaveBeenCalledWith('status', 'succeeded')
+    // Paged past PostgREST's 1000-row cap with a stable order.
+    expect(builder.order).toHaveBeenCalledWith('id', { ascending: true })
+    expect(builder.range).toHaveBeenCalledWith(0, 999)
     expect(result.current.data).toEqual({ total: 350.5, count: 2 })
   })
 })

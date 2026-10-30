@@ -24,7 +24,15 @@ import {
   type BookedRange,
   type DateSelection,
 } from './availability'
-import { todayISO } from './dateRange'
+import {
+  bookingDays,
+  MAX_ADVANCE_MESSAGE,
+  MAX_BOOKING_DAYS,
+  MAX_LENGTH_MESSAGE,
+  maxEndDate,
+  maxStartDate,
+  todayISO,
+} from './dateRange'
 
 const WEEKDAYS = [
   ['Su', 'Sunday'],
@@ -51,7 +59,8 @@ interface AvailabilityCalendarProps {
 
 // Month-grid range picker. Past and booked days can't be picked, and a range
 // that would run across a booked day is rejected (the same rule the server
-// enforces). Keyboard: arrows move by day/week, Home/End to the week's
+// enforces), as are starts more than 365 days ahead and ranges longer than
+// 365 days. Navigation stops at the last month a pick can land in. Keyboard: arrows move by day/week, Home/End to the week's
 // start/end, PageUp/PageDown by month, Enter/Space picks.
 export function AvailabilityCalendar({
   value,
@@ -77,9 +86,21 @@ export function AvailabilityCalendar({
   )
   const [error, setError] = useState<string | null>(null)
 
+  const { startDate, endDate } = value
+  const latestStart = maxStartDate(today)
+  // While choosing an end date the range may run up to 365 days past the
+  // start; otherwise the next pick is a start date.
+  const choosingEnd = !!startDate && !endDate
+  const latestDay =
+    choosingEnd && maxEndDate(startDate) > latestStart
+      ? maxEndDate(startDate)
+      : latestStart
+  const lastMonth = monthOf(latestDay)
+
   const weeks = buildMonthGrid(viewMonth)
   const monthTitle = formatMonthTitle(viewMonth)
   const canGoPrev = compareMonths(viewMonth, todayMonth) > 0
+  const canGoNext = compareMonths(viewMonth, lastMonth) < 0
   const focusInView = compareMonths(monthOf(focusedDate), viewMonth) === 0
   const tabbableDate = focusInView
     ? focusedDate
@@ -96,7 +117,7 @@ export function AvailabilityCalendar({
   }, [focusedDate, viewMonth])
 
   function moveFocus(next: string) {
-    const clamped = next < today ? today : next
+    const clamped = next < today ? today : next > latestDay ? latestDay : next
     setFocusedDate(clamped)
     setViewMonth(monthOf(clamped))
     pendingFocus.current = true
@@ -105,6 +126,7 @@ export function AvailabilityCalendar({
   function goMonth(delta: number) {
     const next = addMonths(viewMonth, delta)
     if (compareMonths(next, todayMonth) < 0) return
+    if (compareMonths(next, lastMonth) > 0) return
     setViewMonth(next)
   }
 
@@ -118,6 +140,18 @@ export function AvailabilityCalendar({
     const result = selectDay(value, day, bookedRanges)
     if (!result.ok) {
       setError(result.error)
+      return
+    }
+    const next = result.selection
+    if (next.startDate > latestStart) {
+      setError(MAX_ADVANCE_MESSAGE)
+      return
+    }
+    if (
+      next.endDate &&
+      bookingDays(next.startDate, next.endDate) > MAX_BOOKING_DAYS
+    ) {
+      setError(MAX_LENGTH_MESSAGE)
       return
     }
     setError(null)
@@ -142,7 +176,6 @@ export function AvailabilityCalendar({
     moveFocus(move())
   }
 
-  const { startDate, endDate } = value
   const cellSize = compact ? 'size-8 text-[11px]' : 'size-9 text-xs sm:size-10'
   const hint = !startDate
     ? 'Select a start date'
@@ -173,9 +206,10 @@ export function AvailabilityCalendar({
         <button
           type="button"
           onClick={() => goMonth(1)}
+          disabled={!canGoNext}
           aria-label="Next month"
           title="Next month"
-          className="flex size-8 items-center justify-center border border-ink/15 text-ink/70 hover:border-ink/40 dark:border-paper/20 dark:text-paper/70 dark:hover:border-paper/50"
+          className="flex size-8 items-center justify-center border border-ink/15 text-ink/70 hover:border-ink/40 disabled:cursor-not-allowed disabled:opacity-30 dark:border-paper/20 dark:text-paper/70 dark:hover:border-paper/50"
         >
           <ChevronRight className="size-4" />
         </button>
@@ -213,8 +247,9 @@ export function AvailabilityCalendar({
                   )
                 }
                 const past = day < today
-                const booked = !past && isBooked(day, bookedRanges)
-                const unavailable = past || booked
+                const tooFar = day > latestDay
+                const booked = !past && !tooFar && isBooked(day, bookedRanges)
+                const unavailable = past || tooFar || booked
                 const isStart = day === startDate
                 const isEnd = day === endDate
                 const inRange =
@@ -224,7 +259,7 @@ export function AvailabilityCalendar({
                 const labelParts = [formatLongDate(day)]
                 if (isToday) labelParts.push('today')
                 if (booked) labelParts.push('booked')
-                else if (past) labelParts.push('unavailable')
+                else if (past || tooFar) labelParts.push('unavailable')
                 if (isStart && isEnd) labelParts.push('selected')
                 else if (isStart) labelParts.push('start date')
                 else if (isEnd) labelParts.push('end date')
@@ -254,7 +289,7 @@ export function AvailabilityCalendar({
                             ? 'bg-accent/15 text-ink dark:text-paper'
                             : booked
                               ? 'cursor-not-allowed bg-ink/5 text-ink/35 line-through dark:bg-paper/5 dark:text-paper/35'
-                              : past
+                              : past || tooFar
                                 ? 'cursor-not-allowed text-ink/20 dark:text-paper/20'
                                 : 'text-ink hover:bg-ink/5 dark:text-paper dark:hover:bg-paper/10',
                         isToday &&

@@ -31,6 +31,8 @@ const STATUS_CLASSES: Record<string, string> = {
   archived: 'border-ink/15 text-ink/40 dark:border-paper/15 dark:text-paper/40',
 }
 
+const LOCKED_MESSAGE = 'Status set by an admin — contact support'
+
 export function MyBillboardsPanel() {
   const formatPrice = useFormatPrice()
   const {
@@ -137,6 +139,9 @@ export function MyBillboardsPanel() {
                 ? errorMessage(setStatus.error)
                 : null
             const override = b.adminPriceOverridePerDay
+            // Admin-moderated listings: the server rejects owner status
+            // changes and deletes (0035), so don't offer them.
+            const locked = b.status === 'flagged' || b.statusLockedByAdmin
             return (
               <Card key={b.id} className="p-4">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-3 sm:flex-nowrap">
@@ -208,7 +213,8 @@ export function MyBillboardsPanel() {
                       <Button
                         size="sm"
                         variant="secondary"
-                        disabled={statusPending}
+                        disabled={statusPending || locked}
+                        title={locked ? LOCKED_MESSAGE : undefined}
                         onClick={() => unarchive(b)}
                       >
                         <ArchiveRestore className="size-3.5" />
@@ -218,9 +224,13 @@ export function MyBillboardsPanel() {
                       <Button
                         size="sm"
                         variant="secondary"
-                        disabled={statusPending}
+                        disabled={statusPending || locked}
                         title={
-                          b.status === 'active' ? 'Deactivate' : 'Activate'
+                          locked
+                            ? LOCKED_MESSAGE
+                            : b.status === 'active'
+                              ? 'Deactivate'
+                              : 'Activate'
                         }
                         aria-label={`${b.status === 'active' ? 'Deactivate' : 'Activate'} ${b.title}`}
                         onClick={() => toggleStatus(b)}
@@ -231,8 +241,13 @@ export function MyBillboardsPanel() {
                     <Button
                       size="sm"
                       variant="danger"
+                      disabled={locked}
                       title={
-                        b.status === 'archived' ? 'Delete' : 'Archive or delete'
+                        locked
+                          ? LOCKED_MESSAGE
+                          : b.status === 'archived'
+                            ? 'Delete'
+                            : 'Archive or delete'
                       }
                       aria-label={`${b.status === 'archived' ? 'Delete' : 'Archive or delete'} ${b.title}`}
                       onClick={() => setRemoving(b)}
@@ -247,6 +262,12 @@ export function MyBillboardsPanel() {
                     <ShieldAlert className="size-3.5 shrink-0" />
                     Flagged by an admin — hidden from renters and can't be
                     reactivated here. Contact support.
+                  </p>
+                )}
+                {locked && b.status !== 'flagged' && (
+                  <p className="mt-3 flex items-center gap-1.5 text-xs text-ink/60 dark:text-paper/60">
+                    <ShieldAlert className="size-3.5 shrink-0" />
+                    {LOCKED_MESSAGE}.
                   </p>
                 )}
                 {statusError && (

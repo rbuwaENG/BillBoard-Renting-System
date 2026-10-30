@@ -10,7 +10,11 @@ import {
 } from './AdminUi'
 import { matchesSearch } from './adminUtils'
 import { toCsv } from './csv'
-import { useAdminBookingsPaged, type AdminBookingRow } from './useAdminBookings'
+import {
+  fetchAllAdminBookings,
+  useAdminBookingsPaged,
+  type AdminBookingRow,
+} from './useAdminBookings'
 import { useFormatPrice } from './useCurrencySetting'
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -39,24 +43,31 @@ function buildBookingsCsv(rows: AdminBookingRow[]) {
   ])
 }
 
+function matchesBookingSearch(search: string, b: AdminBookingRow) {
+  return matchesSearch(
+    search,
+    b.billboardTitle,
+    b.renterName,
+    b.ownerName,
+    b.status,
+    b.id,
+  )
+}
+
 export function BookingsPanel() {
   const formatPrice = useFormatPrice()
   const paged = useAdminBookingsPaged()
   const [search, setSearch] = useState('')
   const rows = useMemo(
-    () =>
-      paged.items.filter((b) =>
-        matchesSearch(
-          search,
-          b.billboardTitle,
-          b.renterName,
-          b.ownerName,
-          b.status,
-          b.id,
-        ),
-      ),
+    () => paged.items.filter((b) => matchesBookingSearch(search, b)),
     [paged.items, search],
   )
+
+  // Export every booking (not just the loaded pages) matching the search.
+  async function exportAll() {
+    const all = await fetchAllAdminBookings()
+    return buildBookingsCsv(all.filter((b) => matchesBookingSearch(search, b)))
+  }
 
   return (
     <Card ticks className="p-5">
@@ -74,7 +85,7 @@ export function BookingsPanel() {
           <CsvExportButton
             name="bookings"
             disabled={rows.length === 0}
-            build={() => buildBookingsCsv(rows)}
+            build={exportAll}
           />
         </div>
       </div>

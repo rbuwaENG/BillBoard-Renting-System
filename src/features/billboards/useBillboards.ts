@@ -17,6 +17,8 @@ export interface BillboardWithDetails {
   adminPriceOverridePerDay: number | null
   images: string[]
   status: BillboardStatus
+  // Admin moderation lock (0035): only an admin can change the status.
+  statusLockedByAdmin?: boolean
   district: string | null
   trafficLevel: TrafficLevel | null
   rating: { avg: number; count: number }
@@ -38,6 +40,7 @@ export interface BillboardRow {
   admin_price_override_per_day: number | null
   images: string[]
   status: BillboardStatus
+  status_locked_by_admin?: boolean | null
   district: string | null
   traffic_level: TrafficLevel | null
   rating_avg: number
@@ -71,6 +74,7 @@ export function toBillboard(row: BillboardRow): BillboardWithDetails {
     adminPriceOverridePerDay: row.admin_price_override_per_day,
     images: row.images,
     status: row.status,
+    statusLockedByAdmin: !!row.status_locked_by_admin,
     district: row.district,
     trafficLevel: row.traffic_level,
     rating: { avg: row.rating_avg, count: row.rating_count },

@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { Download, Search, X } from 'lucide-react'
 import { useId, useState, type ReactNode } from 'react'
 import { Button } from '@/components'
+import { toast } from '@/lib/toast'
 import { ADMIN_INPUT_CLASSES, getErrorMessage } from './adminUtils'
 import { csvFilename, downloadCsv } from './csv'
 
@@ -135,24 +136,40 @@ export function LoadMore({
   )
 }
 
+// `build` may be async (e.g. fetching every row, not just the loaded pages);
+// the button shows a busy state meanwhile and a toast if it fails.
 export function CsvExportButton({
   name,
   build,
   disabled,
 }: {
   name: string
-  build: () => string
+  build: () => string | Promise<string>
   disabled?: boolean
 }) {
+  const [busy, setBusy] = useState(false)
+
+  async function handleExport() {
+    setBusy(true)
+    try {
+      downloadCsv(csvFilename(name), await build())
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Couldn't export the CSV"))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <Button
       size="sm"
       variant="secondary"
-      disabled={disabled}
-      onClick={() => downloadCsv(csvFilename(name), build())}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
+      onClick={() => void handleExport()}
     >
       <Download aria-hidden="true" className="size-3.5" />
-      Export CSV
+      {busy ? 'Exporting…' : 'Export CSV'}
     </Button>
   )
 }

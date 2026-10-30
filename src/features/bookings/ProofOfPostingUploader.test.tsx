@@ -80,10 +80,23 @@ describe('ProofOfPostingUploader', () => {
       new File(['x'], 'c.pdf', { type: 'application/pdf' }),
     ])
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Only image files can be used as proof of posting. Only 1 more photo can be added (max 10 per booking).',
+      'Only JPEG, PNG, WebP, GIF or AVIF images can be used as proof of posting. Only 1 more photo can be added (max 10 per booking).',
     )
     expect(screen.getByAltText('Preview of a.jpg')).toBeInTheDocument()
     expect(screen.queryByAltText('Preview of b.jpg')).not.toBeInTheDocument()
+  })
+
+  it('rejects SVG images (the bucket only takes an explicit list)', () => {
+    setup(0)
+    pick([new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' })])
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Only JPEG, PNG, WebP, GIF or AVIF images can be used as proof of posting.',
+    )
+    expect(screen.queryByAltText('Preview of logo.svg')).not.toBeInTheDocument()
+    expect(document.querySelector('input[type="file"]')).toHaveAttribute(
+      'accept',
+      'image/jpeg,image/png,image/webp,image/gif,image/avif',
+    )
   })
 
   it('hides the picker once the booking has 10 photos', () => {

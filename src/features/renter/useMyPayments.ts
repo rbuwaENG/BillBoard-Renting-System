@@ -48,7 +48,7 @@ export function useMyPayments() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('payments')
-        .select('*, bookings(billboards(title))')
+        .select('*, bookings!payments_booking_id_fkey(billboards(title))')
         .eq('renter_id', user!.uid)
         .order('created_at', { ascending: false })
       if (error) throw error

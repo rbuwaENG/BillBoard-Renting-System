@@ -10,6 +10,7 @@ import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { createQueryBuilderMock, createSupabaseMock } from '@/test/supabaseMock'
 import { supabase } from '@/lib/supabase'
+import * as csvModule from './csv'
 import { PaymentsPanel } from './PaymentsPanel'
 import * as useCurrencySettingModule from './useCurrencySetting'
 
@@ -149,5 +150,63 @@ describe('PaymentsPanel', () => {
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     )
+  })
+
+  it('exports every payment, not just the loaded page, with a busy state', async () => {
+    renderPanel()
+    await findSubmissionCard()
+    const download = vi
+      .spyOn(csvModule, 'downloadCsv')
+      .mockImplementation(() => {})
+
+    // The export pages with 1000-row ranges: a full first page, then a
+    // short one — 1001 rows in total, far more than the 50 loaded.
+    const fullPage = Array.from({ length: 1000 }, (_, i) => ({
+      ...PENDING_ROW,
+      id: `pay-${i}`,
+      status: 'succeeded',
+    }))
+    const exportBuilders: Record<string, unknown>[] = []
+    let resolveFirst: (v: unknown) => void = () => {}
+    vi.mocked(supabase.from).mockImplementation(((table: string) => {
+      const builder = createQueryBuilderMock({ data: [], error: null })
+      builder.range = vi.fn((from: number) => {
+        const data =
+          from === 0 ? fullPage : [{ ...PENDING_ROW, id: 'pay-last' }]
+        const result = { data, error: null }
+        builder.then = (resolve: (v: unknown) => unknown) =>
+          from === 0
+            ? new Promise((r) => (resolveFirst = r)).then(() => resolve(result))
+            : Promise.resolve(result).then(resolve)
+        return builder
+      })
+      if (table === 'payments') exportBuilders.push(builder)
+      return builder
+    }) as never)
+
+    const button = screen.getByRole('button', { name: 'Export CSV' })
+    fireEvent.click(button)
+    expect(
+      await screen.findByRole('button', { name: 'Exporting…' }),
+    ).toBeDisabled()
+    await waitFor(() => expect(exportBuilders.length).toBeGreaterThan(0))
+    resolveFirst(undefined)
+
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1))
+    const ranges = exportBuilders.flatMap((b) =>
+      (b.range as ReturnType<typeof vi.fn>).mock.calls.map((c) =>
+        c.slice(0, 2),
+      ),
+    )
+    expect(ranges).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ])
+    const csv = download.mock.calls[0][1]
+    expect(csv.split('\r\n')).toHaveLength(1 + 1001)
+    expect(csv).toContain('pay-last')
+    expect(
+      await screen.findByRole('button', { name: 'Export CSV' }),
+    ).toBeEnabled()
   })
 })

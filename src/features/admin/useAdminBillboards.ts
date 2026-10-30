@@ -4,7 +4,8 @@ import {
   toBillboard,
   type BillboardRow,
 } from '@/features/billboards/useBillboards'
-import { queryKeys } from '@/lib/queryKeys'
+import { fetchAllRows } from '@/lib/fetchAllRows'
+import { invalidateBillboard, queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import { isMissingFunctionError } from './adminUtils'
 import { usePagedQuery } from './usePagedQuery'
@@ -22,11 +23,11 @@ export const MODERATION_FILTERS = [
 export type ModerationFilter = (typeof MODERATION_FILTERS)[number]
 export type AdminBillboardStatus = 'active' | 'inactive' | 'flagged'
 
-function invalidateBillboardLists(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: queryKeys.adminBillboards.all })
-  qc.invalidateQueries({ queryKey: queryKeys.billboards })
-  qc.invalidateQueries({ queryKey: queryKeys.billboardsNear.all })
-  qc.invalidateQueries({ queryKey: queryKeys.rentorBillboards.all })
+function invalidateBillboardLists(
+  qc: ReturnType<typeof useQueryClient>,
+  billboardId?: string,
+) {
+  void invalidateBillboard(qc, billboardId)
 }
 
 // Admin view over the full platform catalog, regardless of status — RLS
@@ -37,12 +38,16 @@ export function useAdminBillboards() {
   return useQuery({
     queryKey: queryKeys.adminBillboards.all,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('billboards')
-        .select(BILLBOARD_SELECT)
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return (data as unknown as BillboardRow[]).map(toBillboard)
+      // Paged past PostgREST's 1000-row cap so the counts cover everything.
+      const rows = await fetchAllRows<BillboardRow>((from, to) =>
+        supabase
+          .from('billboards')
+          .select(BILLBOARD_SELECT)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to),
+      )
+      return rows.map(toBillboard)
     },
   })
 }
@@ -57,6 +62,7 @@ export function useAdminBillboardsPaged(filter: ModerationFilter) {
         .from('billboards')
         .select(BILLBOARD_SELECT)
         .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
       if (filter !== 'all') query = query.eq('status', filter)
       const { data, error } = await query.range(from, to)
       if (error) throw error
@@ -117,7 +123,7 @@ export function useAdminSetBillboardStatus() {
       }
       await setBillboardStatusAsAdmin(input)
     },
-    onSuccess: () => invalidateBillboardLists(qc),
+    onSuccess: (_data, vars) => invalidateBillboardLists(qc, vars.id),
   })
 }
 
@@ -134,6 +140,6 @@ export function useSetAdminPriceOverride() {
         .eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => invalidateBillboardLists(qc),
+    onSuccess: (_data, vars) => invalidateBillboardLists(qc, vars.id),
   })
 }

@@ -20,6 +20,29 @@ export function bookingDays(startDate: string, endDate: string): number {
   return Math.round(ms / 86_400_000) + 1
 }
 
+// Server limits (request_booking / create_campaign, migration 0035).
+export const MAX_BOOKING_DAYS = 365
+export const MAX_ADVANCE_DAYS = 365
+export const MAX_LENGTH_MESSAGE = 'Bookings can be at most 365 days long'
+export const MAX_ADVANCE_MESSAGE = 'Bookings can start at most 365 days ahead'
+
+// `iso` shifted by whole days (calendar arithmetic, DST-safe via UTC).
+export function addDaysISO(iso: string, days: number): string {
+  const date = new Date(`${iso}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+// The latest day a booking may start on (server: platform_today() + 365).
+export function maxStartDate(today: string = todayISO()): string {
+  return addDaysISO(today, MAX_ADVANCE_DAYS)
+}
+
+// The latest end date for a booking starting on `startDate`.
+export function maxEndDate(startDate: string): string {
+  return addDaysISO(startDate, MAX_BOOKING_DAYS - 1)
+}
+
 export interface DateRangeErrors {
   start?: string
   end?: string
@@ -33,8 +56,16 @@ export function validateDateRange(
   const errors: DateRangeErrors = {}
   if (startDate && startDate < today)
     errors.start = 'Start date cannot be in the past'
+  else if (startDate && startDate > maxStartDate(today))
+    errors.start = MAX_ADVANCE_MESSAGE
   if (startDate && endDate && endDate < startDate) {
     errors.end = 'End date must be on or after the start date.'
+  } else if (
+    startDate &&
+    endDate &&
+    bookingDays(startDate, endDate) > MAX_BOOKING_DAYS
+  ) {
+    errors.end = MAX_LENGTH_MESSAGE
   } else if (!startDate && endDate && endDate < today) {
     errors.end = 'End date cannot be in the past'
   }

@@ -2,6 +2,11 @@ import { X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Button, FileDropzone } from '@/components'
 import {
+  IMAGE_ACCEPT,
+  IMAGE_MIME_TYPES,
+  IMAGE_TYPES_LABEL,
+} from '@/lib/fileKind'
+import {
   MAX_PROOF_PHOTOS,
   useAddProofOfPosting,
   useBookingDocuments,
@@ -54,10 +59,14 @@ export function ProofOfPostingUploader({
   function handleFiles(files: File[]) {
     setError(null)
     setUploadedCount(0)
-    const images = files.filter((f) => f.type.startsWith('image/'))
+    // The bucket takes an explicit list (no SVG), so check the exact type.
+    const allowed: readonly string[] = IMAGE_MIME_TYPES
+    const images = files.filter((f) => allowed.includes(f.type))
     const messages: string[] = []
     if (images.length < files.length)
-      messages.push('Only image files can be used as proof of posting.')
+      messages.push(
+        `Only ${IMAGE_TYPES_LABEL} images can be used as proof of posting.`,
+      )
     const room = remaining - selected.length
     if (images.length > room) {
       messages.push(
@@ -116,7 +125,7 @@ export function ProofOfPostingUploader({
 
       {remaining > 0 ? (
         <FileDropzone
-          accept="image/*"
+          accept={IMAGE_ACCEPT}
           multiple
           maxSizeBytes={MAX_SIZE_BYTES}
           hint={`Images only — up to 10MB each, ${remaining} more allowed`}

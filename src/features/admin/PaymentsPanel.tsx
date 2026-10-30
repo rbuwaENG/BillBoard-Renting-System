@@ -15,6 +15,7 @@ import {
 import { ADMIN_INPUT_CLASSES, formatAge, matchesSearch } from './adminUtils'
 import { toCsv } from './csv'
 import {
+  fetchAllPaymentHistory,
   useAdminPaymentHistory,
   useAwaitingPaymentBookings,
   useConfirmPayment,
@@ -467,24 +468,31 @@ function buildPaymentsCsv(rows: AdminPayment[]) {
   ])
 }
 
+function matchesPaymentSearch(search: string, p: AdminPayment) {
+  return matchesSearch(
+    search,
+    p.billboardTitle,
+    p.renterName,
+    p.reference,
+    p.status,
+    p.id,
+  )
+}
+
 function PaymentHistory() {
   const formatPrice = useFormatPrice()
   const history = useAdminPaymentHistory()
   const [search, setSearch] = useState('')
   const rows = useMemo(
-    () =>
-      history.items.filter((p) =>
-        matchesSearch(
-          search,
-          p.billboardTitle,
-          p.renterName,
-          p.reference,
-          p.status,
-          p.id,
-        ),
-      ),
+    () => history.items.filter((p) => matchesPaymentSearch(search, p)),
     [history.items, search],
   )
+
+  // Export every payment (not just the loaded pages) matching the search.
+  async function exportAll() {
+    const all = await fetchAllPaymentHistory()
+    return buildPaymentsCsv(all.filter((p) => matchesPaymentSearch(search, p)))
+  }
 
   return (
     <div>
@@ -500,7 +508,7 @@ function PaymentHistory() {
           <CsvExportButton
             name="payments"
             disabled={rows.length === 0}
-            build={() => buildPaymentsCsv(rows)}
+            build={exportAll}
           />
         </div>
       </div>

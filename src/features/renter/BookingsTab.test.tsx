@@ -37,7 +37,11 @@ function makeBooking(overrides: Partial<MyBooking> = {}): MyBooking {
 
 function setup(
   bookings: MyBooking[],
-  { loading = false, events = [] as bookingsModule.BookingEvent[] } = {},
+  {
+    loading = false,
+    events = [] as bookingsModule.BookingEvent[],
+    paymentsError = false,
+  } = {},
 ) {
   vi.spyOn(myBookingsModule, 'useMyBookings').mockReturnValue({
     data: loading ? undefined : bookings,
@@ -47,11 +51,14 @@ function setup(
     refetch: vi.fn(),
   } as unknown as ReturnType<typeof myBookingsModule.useMyBookings>)
   vi.spyOn(myPaymentsModule, 'useMyPayments').mockReturnValue({
-    data: [
-      { id: 'p1', status: 'succeeded', amount: 300 },
-      { id: 'p2', status: 'pending', amount: 700 },
-    ],
+    data: paymentsError
+      ? undefined
+      : [
+          { id: 'p1', status: 'succeeded', amount: 300 },
+          { id: 'p2', status: 'pending', amount: 700 },
+        ],
     isLoading: false,
+    isError: paymentsError,
   } as unknown as ReturnType<typeof myPaymentsModule.useMyPayments>)
   vi.spyOn(bookingsModule, 'useBookingEvents').mockReturnValue({
     data: events,
@@ -79,6 +86,13 @@ describe("BookingsTab — I've paid", () => {
     // 300 succeeded; the 700 pending submission must not be counted
     expect(screen.getByText(/300/)).toBeInTheDocument()
     expect(screen.queryByText(/1,000|1000/)).toBeNull()
+  })
+
+  it('shows a dash instead of 0 for total paid when payments fail to load', () => {
+    setup([makeBooking()], { paymentsError: true })
+    const card = screen.getByText('Total paid').parentElement!
+    expect(card).toHaveTextContent('—')
+    expect(card).not.toHaveTextContent(/0/)
   })
 
   it('submits a payment through the confirm dialog', async () => {

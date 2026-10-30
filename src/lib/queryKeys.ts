@@ -45,6 +45,7 @@ export const queryKeys = {
     all: ['admin-pending-payments'] as const,
     submissions: ['admin-pending-payments', 'submissions'] as const,
     awaiting: ['admin-pending-payments', 'awaiting'] as const,
+    unverified: ['admin-pending-payments', 'unverified'] as const,
   },
   adminPayableBookings: ['admin-payable-bookings'] as const,
   adminPayouts: ['admin-payouts'] as const,
@@ -95,6 +96,24 @@ export const queryKeys = {
   paymentGatewaySettings: ['payment-gateway-settings'] as const,
   categories: ['categories'] as const,
   sizes: ['sizes'] as const,
+}
+
+// Everything that shows a billboard's listing data (status, price, rating,
+// images…): the browse/near lists, the owner's and admin's lists and the
+// single-billboard page. Call after an owner edit/archive/delete, an admin
+// status change or price override, or a new review (ratings). Pass
+// `billboardId` to narrow the single-billboard page to that listing.
+export function invalidateBillboard(qc: QueryClient, billboardId?: string) {
+  const keys = [
+    queryKeys.billboards,
+    queryKeys.billboardsNear.all,
+    queryKeys.rentorBillboards.all,
+    queryKeys.adminBillboards.all,
+    billboardId ? queryKeys.billboard(billboardId) : queryKeys.billboard.all,
+  ]
+  return Promise.all(
+    keys.map((queryKey) => qc.invalidateQueries({ queryKey })),
+  ).then(() => undefined)
 }
 
 // Everything that can change when a booking is created, moves status, is
