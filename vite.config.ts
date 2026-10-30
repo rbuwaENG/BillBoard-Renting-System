@@ -29,7 +29,7 @@ export default defineConfig({
           }
           if (/[\\/]node_modules[\\/]@supabase[\\/]/.test(id)) return 'supabase'
           if (
-            /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|@remix-run)[\\/]/.test(
+            /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom)[\\/]/.test(
               id,
             )
           ) {

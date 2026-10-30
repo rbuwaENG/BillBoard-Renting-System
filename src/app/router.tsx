@@ -1,5 +1,6 @@
 import { createBrowserRouter, type RouteObject } from 'react-router-dom'
 import { NotFoundPage } from './NotFoundPage'
+import { PageLoader } from './PageLoader'
 import { RoleGuard } from './RoleGuard'
 import { RootLayout } from './RootLayout'
 import { RouteErrorBoundary } from './RouteError'
@@ -9,11 +10,15 @@ import { RouteErrorBoundary } from './RouteError'
 // page stays up meanwhile, with <NavigationProgress> in the layout), and a
 // chunk that fails to load lands in the nearest `errorElement` instead of
 // white-screening. Only the layout, guard and error/404 pages ship in the
-// entry chunk.
+// entry chunk. Keep `errorElement` on an ancestor of each lazy route, never on
+// the lazy route itself: react-router 7 doesn't render a route whose `lazy`
+// rejected, so its own boundary would never show.
 export const routes: RouteObject[] = [
   {
     path: '/',
     element: <RootLayout />,
+    // Shown until the first matched route's lazy chunk has loaded.
+    hydrateFallbackElement: <PageLoader fullScreen />,
     // Last resort: the layout itself failed, so replace the whole screen.
     errorElement: <RouteErrorBoundary fullScreen />,
     children: [
