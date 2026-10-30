@@ -2,7 +2,15 @@ export type FileKind = 'image' | 'video' | 'pdf' | 'other'
 
 // 'svg' stays here only so legacy uploads still render as images; new SVG
 // uploads are rejected (see IMAGE_MIME_TYPES).
-const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'avif'])
+const IMAGE_EXTENSIONS = new Set([
+  'jpg',
+  'jpeg',
+  'png',
+  'gif',
+  'webp',
+  'svg',
+  'avif',
+])
 const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'webm', 'avi', 'mkv'])
 
 // Inferred from the stored path's filename — storage paths embed a slug of
@@ -16,7 +24,8 @@ export function getFileKind(path: string): FileKind {
   return 'other'
 }
 
-const UUID_PREFIX_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i
+const UUID_PREFIX_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i
 
 export function getFilename(path: string): string {
   const name = path.split('/').pop() ?? path

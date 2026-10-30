@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { Booking } from '@/types'
-import { computeBookingTimeline, getAwaitingDocumentsInfo } from './bookingTimelineLogic'
+import {
+  computeBookingTimeline,
+  getAwaitingDocumentsInfo,
+} from './bookingTimelineLogic'
 import type { BookingEvent } from './useBookingEvents'
 
-const CTX = { viewerRole: 'renter' as const, ownerName: 'Owner Oscar', renterName: 'Renter Rita' }
+const CTX = {
+  viewerRole: 'renter' as const,
+  ownerName: 'Owner Oscar',
+  renterName: 'Renter Rita',
+}
 
 function makeBooking(overrides: Partial<Booking> = {}): Booking {
   return {
@@ -35,7 +42,10 @@ function makeEvent(overrides: Partial<BookingEvent>): BookingEvent {
   }
 }
 
-function stageByKey(stages: ReturnType<typeof computeBookingTimeline>, key: string) {
+function stageByKey(
+  stages: ReturnType<typeof computeBookingTimeline>,
+  key: string,
+) {
   return stages.find((s) => s.key === key)
 }
 
@@ -61,7 +71,10 @@ describe('computeBookingTimeline', () => {
   })
 
   it('shows "Payment Pending" as current once approved', () => {
-    const booking = makeBooking({ status: 'payment_pending', decisionAt: '2026-10-02T00:00:00.000Z' })
+    const booking = makeBooking({
+      status: 'payment_pending',
+      decisionAt: '2026-10-02T00:00:00.000Z',
+    })
     const stages = computeBookingTimeline(booking, [], CTX)
     expect(stageByKey(stages, 'review')?.state).toBe('completed')
     expect(stageByKey(stages, 'payment')?.state).toBe('current')
@@ -69,12 +82,22 @@ describe('computeBookingTimeline', () => {
   })
 
   it('shows "Booking Confirmed" as current once paid', () => {
-    const booking = makeBooking({ status: 'confirmed', decisionAt: '2026-10-02T00:00:00.000Z' })
-    const events = [makeEvent({ toStatus: 'confirmed', createdAt: '2026-10-03T00:00:00.000Z' })]
+    const booking = makeBooking({
+      status: 'confirmed',
+      decisionAt: '2026-10-02T00:00:00.000Z',
+    })
+    const events = [
+      makeEvent({
+        toStatus: 'confirmed',
+        createdAt: '2026-10-03T00:00:00.000Z',
+      }),
+    ]
     const stages = computeBookingTimeline(booking, events, CTX)
     expect(stageByKey(stages, 'payment')?.state).toBe('completed')
     expect(stageByKey(stages, 'confirmed')?.state).toBe('current')
-    expect(stageByKey(stages, 'confirmed')?.timestamp).toBe('2026-10-03T00:00:00.000Z')
+    expect(stageByKey(stages, 'confirmed')?.timestamp).toBe(
+      '2026-10-03T00:00:00.000Z',
+    )
     expect(stageByKey(stages, 'active')?.state).toBe('upcoming')
   })
 
@@ -99,8 +122,14 @@ describe('computeBookingTimeline', () => {
   it('ends in "Booking Cancelled" and includes a completed Payment Pending stage if it was approved first', () => {
     const booking = makeBooking({ status: 'cancelled' })
     const events = [
-      makeEvent({ toStatus: 'payment_pending', createdAt: '2026-10-02T00:00:00.000Z' }),
-      makeEvent({ toStatus: 'cancelled', createdAt: '2026-10-03T00:00:00.000Z' }),
+      makeEvent({
+        toStatus: 'payment_pending',
+        createdAt: '2026-10-02T00:00:00.000Z',
+      }),
+      makeEvent({
+        toStatus: 'cancelled',
+        createdAt: '2026-10-03T00:00:00.000Z',
+      }),
     ]
     const stages = computeBookingTimeline(booking, events, CTX)
     expect(stageByKey(stages, 'payment')?.state).toBe('completed')
@@ -110,7 +139,12 @@ describe('computeBookingTimeline', () => {
 
   it('omits the completed Payment Pending stage when cancelled before approval', () => {
     const booking = makeBooking({ status: 'cancelled' })
-    const events = [makeEvent({ toStatus: 'cancelled', createdAt: '2026-10-02T00:00:00.000Z' })]
+    const events = [
+      makeEvent({
+        toStatus: 'cancelled',
+        createdAt: '2026-10-02T00:00:00.000Z',
+      }),
+    ]
     const stages = computeBookingTimeline(booking, events, CTX)
     expect(stageByKey(stages, 'payment')).toBeUndefined()
     expect(stages.at(-1)?.key).toBe('cancelled')
@@ -127,7 +161,9 @@ describe('computeBookingTimeline', () => {
     ]
     const stages = computeBookingTimeline(booking, events, CTX)
     expect(stageByKey(stages, 'awaiting-info')?.state).toBe('current')
-    expect(stageByKey(stages, 'awaiting-info')?.description).toContain('brand logo')
+    expect(stageByKey(stages, 'awaiting-info')?.description).toContain(
+      'brand logo',
+    )
     expect(stageByKey(stages, 'review')).toBeUndefined()
   })
 
@@ -158,8 +194,14 @@ describe('getAwaitingDocumentsInfo', () => {
 
   it('stays active if the latest upload predates the latest request', () => {
     const events = [
-      makeEvent({ eventType: 'document_uploaded', createdAt: '2026-10-01T00:00:00.000Z' }),
-      makeEvent({ eventType: 'document_requested', createdAt: '2026-10-02T00:00:00.000Z' }),
+      makeEvent({
+        eventType: 'document_uploaded',
+        createdAt: '2026-10-01T00:00:00.000Z',
+      }),
+      makeEvent({
+        eventType: 'document_requested',
+        createdAt: '2026-10-02T00:00:00.000Z',
+      }),
     ]
     expect(getAwaitingDocumentsInfo(events).active).toBe(true)
   })
@@ -174,7 +216,11 @@ describe('computeBookingTimeline — Posted step (proof of posting)', () => {
   })
 
   it('is upcoming while a confirmed booking has no proof yet', () => {
-    const stages = computeBookingTimeline(makeBooking({ status: 'confirmed' }), [], CTX)
+    const stages = computeBookingTimeline(
+      makeBooking({ status: 'confirmed' }),
+      [],
+      CTX,
+    )
     const keys = stages.map((s) => s.key)
     expect(keys.indexOf('posted')).toBe(keys.indexOf('confirmed') + 1)
     expect(stageByKey(stages, 'posted')?.state).toBe('upcoming')
@@ -182,8 +228,16 @@ describe('computeBookingTimeline — Posted step (proof of posting)', () => {
   })
 
   it('is complete once proof exists, and carries the booking id for the photos', () => {
-    const later = makeEvent({ ...proof, id: 'event-proof-2', createdAt: '2026-11-02T09:00:00.000Z' })
-    const stages = computeBookingTimeline(makeBooking({ status: 'confirmed' }), [later, proof], CTX)
+    const later = makeEvent({
+      ...proof,
+      id: 'event-proof-2',
+      createdAt: '2026-11-02T09:00:00.000Z',
+    })
+    const stages = computeBookingTimeline(
+      makeBooking({ status: 'confirmed' }),
+      [later, proof],
+      CTX,
+    )
     expect(stageByKey(stages, 'posted')).toMatchObject({
       state: 'completed',
       timestamp: proof.createdAt,
@@ -194,26 +248,48 @@ describe('computeBookingTimeline — Posted step (proof of posting)', () => {
 
   it('asks the owner for proof while an active booking has none', () => {
     const booking = makeBooking({ status: 'active' })
-    const owner = computeBookingTimeline(booking, [], { ...CTX, viewerRole: 'owner' })
+    const owner = computeBookingTimeline(booking, [], {
+      ...CTX,
+      viewerRole: 'owner',
+    })
     expect(stageByKey(owner, 'posted')?.state).toBe('upcoming')
-    expect(stageByKey(owner, 'active')).toMatchObject({ state: 'current', actor: 'owner' })
-    expect(stageByKey(owner, 'active')?.description).toMatch(/upload proof of posting/i)
+    expect(stageByKey(owner, 'active')).toMatchObject({
+      state: 'current',
+      actor: 'owner',
+    })
+    expect(stageByKey(owner, 'active')?.description).toMatch(
+      /upload proof of posting/i,
+    )
 
     const renter = computeBookingTimeline(booking, [], CTX)
-    expect(stageByKey(renter, 'active')?.description).toMatch(/hasn't shared proof of posting/)
+    expect(stageByKey(renter, 'active')?.description).toMatch(
+      /hasn't shared proof of posting/,
+    )
 
-    const withProof = computeBookingTimeline(booking, [proof], { ...CTX, viewerRole: 'owner' })
+    const withProof = computeBookingTimeline(booking, [proof], {
+      ...CTX,
+      viewerRole: 'owner',
+    })
     expect(stageByKey(withProof, 'active')?.actor).toBe('platform')
     expect(stageByKey(withProof, 'active')?.description).not.toMatch(/proof/i)
   })
 
   it('is skipped for completed bookings that never had proof', () => {
     expect(
-      stageByKey(computeBookingTimeline(makeBooking({ status: 'completed' }), [], CTX), 'posted'),
+      stageByKey(
+        computeBookingTimeline(makeBooking({ status: 'completed' }), [], CTX),
+        'posted',
+      ),
     ).toBeUndefined()
     expect(
-      stageByKey(computeBookingTimeline(makeBooking({ status: 'completed' }), [proof], CTX), 'posted')
-        ?.state,
+      stageByKey(
+        computeBookingTimeline(
+          makeBooking({ status: 'completed' }),
+          [proof],
+          CTX,
+        ),
+        'posted',
+      )?.state,
     ).toBe('completed')
   })
 })

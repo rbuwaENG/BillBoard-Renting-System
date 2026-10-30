@@ -28,7 +28,8 @@ export function ReviewDialog({
   function handleStarKey(e: KeyboardEvent<HTMLButtonElement>, n: number) {
     let next: number | null = null
     if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = Math.min(5, n + 1)
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = Math.max(1, n - 1)
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown')
+      next = Math.max(1, n - 1)
     if (next === null) return
     e.preventDefault()
     setRating(next)
@@ -38,7 +39,11 @@ export function ReviewDialog({
   async function handleSubmit() {
     if (rating < 1) return
     try {
-      await submitReview.mutateAsync({ bookingId, rating, comment: comment.trim() || undefined })
+      await submitReview.mutateAsync({
+        bookingId,
+        rating,
+        comment: comment.trim() || undefined,
+      })
       setComment('')
       setRating(0)
       onOpenChange(false)

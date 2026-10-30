@@ -1,4 +1,10 @@
-import { FileText, Image as ImageIcon, Paperclip, Trash2, Video } from 'lucide-react'
+import {
+  FileText,
+  Image as ImageIcon,
+  Paperclip,
+  Trash2,
+  Video,
+} from 'lucide-react'
 import { useState } from 'react'
 import { FileDropzone } from '@/components'
 import { useAuth } from '@/hooks/useAuth'
@@ -22,7 +28,12 @@ import {
 const ACCEPT = MEDIA_ACCEPT
 const MAX_SIZE_BYTES = 10 * 1024 * 1024
 
-const KIND_ICON = { image: ImageIcon, video: Video, pdf: FileText, other: Paperclip } as const
+const KIND_ICON = {
+  image: ImageIcon,
+  video: Video,
+  pdf: FileText,
+  other: Paperclip,
+} as const
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -36,7 +47,11 @@ interface BookingDocumentsProps {
   canRemove?: (doc: BookingDocument) => boolean
 }
 
-export function BookingDocuments({ bookingId, canUpload, canRemove }: BookingDocumentsProps) {
+export function BookingDocuments({
+  bookingId,
+  canUpload,
+  canRemove,
+}: BookingDocumentsProps) {
   const { user } = useAuth()
   const { data, isLoading } = useBookingDocuments(bookingId)
   // Proof-of-posting photos are shown in the timeline's "Posted" step.
@@ -73,11 +88,16 @@ export function BookingDocuments({ bookingId, canUpload, canRemove }: BookingDoc
 
   return (
     <div className="space-y-4">
-      {isLoading && <p className="text-sm text-ink/40 dark:text-paper/40">Loading documents…</p>}
+      {isLoading && (
+        <p className="text-sm text-ink/40 dark:text-paper/40">
+          Loading documents…
+        </p>
+      )}
 
       {!isLoading && documents.length === 0 && (
         <p className="py-6 text-center text-sm text-ink/40 dark:text-paper/40">
-          No documents yet — artwork, briefs, or logos you attach will appear here.
+          No documents yet — artwork, briefs, or logos you attach will appear
+          here.
         </p>
       )}
 
@@ -85,7 +105,9 @@ export function BookingDocuments({ bookingId, canUpload, canRemove }: BookingDoc
         <ul className="space-y-2">
           {documents.map((doc) => {
             const Icon = KIND_ICON[getFileKind(doc.storagePath)]
-            const removable = canRemove ? canRemove(doc) : doc.uploadedBy === user?.uid
+            const removable = canRemove
+              ? canRemove(doc)
+              : doc.uploadedBy === user?.uid
             return (
               <li
                 key={doc.id}
@@ -108,7 +130,9 @@ export function BookingDocuments({ bookingId, canUpload, canRemove }: BookingDoc
                   <button
                     type="button"
                     title="Remove"
-                    onClick={() => removeDocument.mutate({ documentId: doc.id, bookingId })}
+                    onClick={() =>
+                      removeDocument.mutate({ documentId: doc.id, bookingId })
+                    }
                     className="shrink-0 text-ink/40 hover:text-brand-error dark:text-paper/40"
                   >
                     <Trash2 className="size-3.5" />
@@ -135,7 +159,9 @@ export function BookingDocuments({ bookingId, canUpload, canRemove }: BookingDoc
             onError={setError}
           />
           {uploading && (
-            <p className="mt-2 font-mono text-[11px] text-ink/50 dark:text-paper/50">Uploading…</p>
+            <p className="mt-2 font-mono text-[11px] text-ink/50 dark:text-paper/50">
+              Uploading…
+            </p>
           )}
           {error && <p className="mt-2 text-xs text-brand-error">{error}</p>}
         </div>

@@ -38,9 +38,12 @@ describe('useInviteAdmin', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-    expect(supabase.functions.invoke).toHaveBeenCalledWith('admin-invite-user', {
-      body: { email: 'new-admin@example.com', name: 'New Admin' },
-    })
+    expect(supabase.functions.invoke).toHaveBeenCalledWith(
+      'admin-invite-user',
+      {
+        body: { email: 'new-admin@example.com', name: 'New Admin' },
+      },
+    )
   })
 
   it('surfaces a function-level error', async () => {

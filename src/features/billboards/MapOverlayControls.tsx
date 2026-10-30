@@ -1,4 +1,11 @@
-import { LocateFixed, Moon, ShoppingCart, SlidersHorizontal, Sun, X } from 'lucide-react'
+import {
+  LocateFixed,
+  Moon,
+  ShoppingCart,
+  SlidersHorizontal,
+  Sun,
+  X,
+} from 'lucide-react'
 import { useEffect, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { currentPath, loginPath } from '@/features/auth/redirect'

@@ -19,9 +19,10 @@ export function MessagesTab() {
     refetch: refetchThreads,
   } = useMyChatThreads()
   const threads = threadsData ?? []
-  const [activeThread, setActiveThread] = useState<
-    { id: string; title: string } | null
-  >(null)
+  const [activeThread, setActiveThread] = useState<{
+    id: string
+    title: string
+  } | null>(null)
 
   const threadBillboardIds = new Set(threads.map((t) => t.billboardId))
   const bookedIds = Array.from(
@@ -62,7 +63,10 @@ export function MessagesTab() {
                 key={thread.id}
                 type="button"
                 onClick={() =>
-                  setActiveThread({ id: thread.id, title: thread.counterpartName })
+                  setActiveThread({
+                    id: thread.id,
+                    title: thread.counterpartName,
+                  })
                 }
                 className="flex w-full items-center gap-3 border border-ink/10 p-3 text-left hover:border-accent dark:border-paper/15"
               >
@@ -93,14 +97,13 @@ export function MessagesTab() {
           Start a conversation
         </h3>
         <p className="mt-0.5 text-xs text-ink/50 dark:text-paper/50">
-          You can message any owner from a billboard's details, before or
-          after booking. Billboards you've booked are listed here for quick
-          access.
+          You can message any owner from a billboard's details, before or after
+          booking. Billboards you've booked are listed here for quick access.
         </p>
         {startableIds.length === 0 ? (
           <p className="mt-3 text-sm text-ink/40 dark:text-paper/40">
-            Nothing to start here — billboards you book will show up for a
-            quick message.
+            Nothing to start here — billboards you book will show up for a quick
+            message.
           </p>
         ) : (
           <div className="mt-3 space-y-2">
@@ -152,7 +155,8 @@ function StartChatButton({
         disabled={startThread.isPending}
         onClick={() =>
           startThread.mutate(billboardId, {
-            onSuccess: (thread) => onStarted({ id: thread.id, title: ownerName }),
+            onSuccess: (thread) =>
+              onStarted({ id: thread.id, title: ownerName }),
           })
         }
       >

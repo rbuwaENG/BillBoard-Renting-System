@@ -3,10 +3,13 @@ import type { Booking } from '@/types'
 import type { AnyBookingStatus } from './bookingStatus'
 import type { BookingEvent } from './useBookingEvents'
 
-export const EXPIRED_REQUEST_COPY = "Request expired — the owner didn't respond in time"
-export const EXPIRED_PAYMENT_COPY = "Booking expired — payment wasn't completed in time"
+export const EXPIRED_REQUEST_COPY =
+  "Request expired — the owner didn't respond in time"
+export const EXPIRED_PAYMENT_COPY =
+  "Booking expired — payment wasn't completed in time"
 
-export type TimelineStageState = 'completed' | 'current' | 'upcoming' | 'blocked'
+export type TimelineStageState =
+  'completed' | 'current' | 'upcoming' | 'blocked'
 export type TimelineActor = 'customer' | 'owner' | 'platform'
 
 export interface TimelineStage {
@@ -36,13 +39,20 @@ export interface AwaitingDocumentsInfo {
   requestedAt?: string
 }
 
-function findEventTimestamp(events: BookingEvent[], toStatus: string): string | undefined {
-  return events.find((e) => e.eventType === 'status_change' && e.toStatus === toStatus)?.createdAt
+function findEventTimestamp(
+  events: BookingEvent[],
+  toStatus: string,
+): string | undefined {
+  return events.find(
+    (e) => e.eventType === 'status_change' && e.toStatus === toStatus,
+  )?.createdAt
 }
 
 // A document request is "resolved" once the renter uploads something after
 // it was asked for — purely derived from the event log, no extra status.
-export function getAwaitingDocumentsInfo(events: BookingEvent[]): AwaitingDocumentsInfo {
+export function getAwaitingDocumentsInfo(
+  events: BookingEvent[],
+): AwaitingDocumentsInfo {
   let lastRequest: BookingEvent | null = null
   let lastUpload: BookingEvent | null = null
   for (const e of events) {
@@ -51,7 +61,11 @@ export function getAwaitingDocumentsInfo(events: BookingEvent[]): AwaitingDocume
   }
   if (!lastRequest) return { active: false, note: null }
   const resolved = !!lastUpload && lastUpload.createdAt > lastRequest.createdAt
-  return { active: !resolved, note: lastRequest.message, requestedAt: lastRequest.createdAt }
+  return {
+    active: !resolved,
+    note: lastRequest.message,
+    requestedAt: lastRequest.createdAt,
+  }
 }
 
 // When the owner first shared proof of posting (add_proof_of_posting logs a
@@ -59,7 +73,8 @@ export function getAwaitingDocumentsInfo(events: BookingEvent[]): AwaitingDocume
 export function getProofPostedAt(events: BookingEvent[]): string | undefined {
   let first: string | undefined
   for (const e of events) {
-    if (e.eventType === 'proof_posted' && (!first || e.createdAt < first)) first = e.createdAt
+    if (e.eventType === 'proof_posted' && (!first || e.createdAt < first))
+      first = e.createdAt
   }
   return first
 }
@@ -88,7 +103,12 @@ export function computeBookingTimeline(
   })
 
   if (booking.status === 'rejected') {
-    stages.push({ key: 'review', label: 'Owner Reviewing', state: 'completed', timestamp: booking.createdAt })
+    stages.push({
+      key: 'review',
+      label: 'Owner Reviewing',
+      state: 'completed',
+      timestamp: booking.createdAt,
+    })
     stages.push({
       key: 'declined',
       label: 'Request Declined',
@@ -108,7 +128,12 @@ export function computeBookingTimeline(
 
   if (booking.status === 'cancelled') {
     const wasApproved = events.some((e) => e.toStatus === 'payment_pending')
-    stages.push({ key: 'review', label: 'Owner Reviewing', state: 'completed', timestamp: booking.createdAt })
+    stages.push({
+      key: 'review',
+      label: 'Owner Reviewing',
+      state: 'completed',
+      timestamp: booking.createdAt,
+    })
     if (wasApproved) {
       stages.push({
         key: 'payment',
@@ -141,7 +166,8 @@ export function computeBookingTimeline(
         key: 'payment',
         label: 'Payment Pending',
         state: 'completed',
-        timestamp: findEventTimestamp(events, 'payment_pending') ?? booking.decisionAt,
+        timestamp:
+          findEventTimestamp(events, 'payment_pending') ?? booking.decisionAt,
       })
     }
     stages.push({
@@ -188,7 +214,12 @@ export function computeBookingTimeline(
       })
     }
   } else {
-    stages.push({ key: 'review', label: 'Owner Reviewing', state: 'completed', timestamp: booking.createdAt })
+    stages.push({
+      key: 'review',
+      label: 'Owner Reviewing',
+      state: 'completed',
+      timestamp: booking.createdAt,
+    })
   }
 
   // --- Payment Pending (or the same interstitial, if requested post-approval) ---
@@ -224,7 +255,11 @@ export function computeBookingTimeline(
         actor: paymentState === 'submitted' ? 'platform' : 'customer',
       })
     }
-  } else if (booking.status === 'confirmed' || booking.status === 'active' || booking.status === 'completed') {
+  } else if (
+    booking.status === 'confirmed' ||
+    booking.status === 'active' ||
+    booking.status === 'completed'
+  ) {
     stages.push({
       key: 'payment',
       label: 'Payment Pending',
@@ -257,7 +292,11 @@ export function computeBookingTimeline(
       timestamp: findEventTimestamp(events, 'confirmed'),
     })
   } else {
-    stages.push({ key: 'confirmed', label: 'Booking Confirmed', state: 'upcoming' })
+    stages.push({
+      key: 'confirmed',
+      label: 'Booking Confirmed',
+      state: 'upcoming',
+    })
   }
 
   // --- Posted (proof of posting, contract 7) ---
@@ -318,7 +357,11 @@ export function computeBookingTimeline(
       actor: 'platform',
     })
   } else {
-    stages.push({ key: 'completed', label: 'Rental Completed', state: 'upcoming' })
+    stages.push({
+      key: 'completed',
+      label: 'Rental Completed',
+      state: 'upcoming',
+    })
   }
 
   return stages

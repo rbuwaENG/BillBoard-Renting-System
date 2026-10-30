@@ -59,7 +59,8 @@ export function getDisplayPrice(billboard: PricedBillboard): DisplayPrice {
   const price = resolveEffectivePricePerDay(billboard)
   return {
     price,
-    strikethroughFrom: price < billboard.pricePerDay ? billboard.pricePerDay : null,
+    strikethroughFrom:
+      price < billboard.pricePerDay ? billboard.pricePerDay : null,
   }
 }
 

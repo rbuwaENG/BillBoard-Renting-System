@@ -88,7 +88,11 @@ export function FileDropzone({
       <p className="font-mono text-[11px] tracking-widest text-ink/60 uppercase dark:text-paper/60">
         Drag files here or click to browse
       </p>
-      {hint && <p className="font-mono text-[10px] text-ink/40 dark:text-paper/40">{hint}</p>}
+      {hint && (
+        <p className="font-mono text-[10px] text-ink/40 dark:text-paper/40">
+          {hint}
+        </p>
+      )}
       <input
         ref={inputRef}
         type="file"

@@ -19,6 +19,7 @@ jobs:
 
       - run: npm ci
       - run: npm run lint
+      - run: npx prettier --check .
 
       # Unit tests mock @/lib/supabase globally (src/test/setup.ts), so they
       # need no Supabase env and make no network calls.

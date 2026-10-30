@@ -36,7 +36,9 @@ export async function uploadProofOfPosting(
   return path
 }
 
-export async function getBookingCreativeUrl(path: string): Promise<string | null> {
+export async function getBookingCreativeUrl(
+  path: string,
+): Promise<string | null> {
   const { data, error } = await supabase.storage
     .from('booking-creatives')
     .createSignedUrl(path, 3600)

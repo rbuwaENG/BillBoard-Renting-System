@@ -51,7 +51,13 @@ async function insertBooking(
   return rows[0].id
 }
 
-function request(db: Db, userId: string, billboardId: string, start: string, end: string) {
+function request(
+  db: Db,
+  userId: string,
+  billboardId: string,
+  start: string,
+  end: string,
+) {
   return asUser(db, userId, (tx) =>
     rpc(tx, 'request_booking', {
       p_billboard_id: billboardId,
@@ -62,10 +68,10 @@ function request(db: Db, userId: string, billboardId: string, start: string, end
 }
 
 async function statusOf(db: Db, id: string) {
-  const { rows } = await db.query<{ status: string; rejection_reason: string | null }>(
-    `select status, rejection_reason from public.bookings where id = $1`,
-    [id],
-  )
+  const { rows } = await db.query<{
+    status: string
+    rejection_reason: string | null
+  }>(`select status, rejection_reason from public.bookings where id = $1`, [id])
   return rows[0]
 }
 
@@ -98,7 +104,13 @@ describe('0032: request_booking rules', () => {
 
   it('rejects end before start', async () => {
     await expect(
-      request(db, s.renter.id, s.billboard.id, daysFromNow(20), daysFromNow(19)),
+      request(
+        db,
+        s.renter.id,
+        s.billboard.id,
+        daysFromNow(20),
+        daysFromNow(19),
+      ),
     ).rejects.toThrow('End date must be on or after the start date')
   })
 
@@ -128,14 +140,25 @@ describe('0032: request_booking rules', () => {
         }),
       ),
     ).rejects.toThrow()
-    const suspended = await createUser(db, { role: 'renter', status: 'suspended' })
+    const suspended = await createUser(db, {
+      role: 'renter',
+      status: 'suspended',
+    })
     await expect(
-      request(db, suspended.id, s.billboard.id, daysFromNow(40), daysFromNow(41)),
+      request(
+        db,
+        suspended.id,
+        s.billboard.id,
+        daysFromNow(40),
+        daysFromNow(41),
+      ),
     ).rejects.toThrow('Account suspended')
   })
 
   it('rejects inactive billboards', async () => {
-    const inactive = await createBillboard(db, s.owner.id, { status: 'inactive' })
+    const inactive = await createBillboard(db, s.owner.id, {
+      status: 'inactive',
+    })
     await expect(
       request(db, s.renter.id, inactive.id, daysFromNow(5), daysFromNow(6)),
     ).rejects.toThrow('Billboard is not available for booking')
@@ -151,18 +174,35 @@ describe('0032: request_booking rules', () => {
       request(db, other.id, s.billboard.id, daysFromNow(55), daysFromNow(58)),
     ).rejects.toThrow('Selected dates overlap an existing booking')
     // Adjacent range is fine (inclusive end).
-    await request(db, other.id, s.billboard.id, daysFromNow(56), daysFromNow(58))
+    await request(
+      db,
+      other.id,
+      s.billboard.id,
+      daysFromNow(56),
+      daysFromNow(58),
+    )
   })
 
   it('the exclusion constraint rejects overlaps written past the RPC (23P01)', async () => {
     await insertBooking(db, s, daysFromNow(70), daysFromNow(72), 'confirmed')
     await expect(
-      insertBooking(db, s, daysFromNow(72), daysFromNow(74), 'pending_owner_review'),
+      insertBooking(
+        db,
+        s,
+        daysFromNow(72),
+        daysFromNow(74),
+        'pending_owner_review',
+      ),
     ).rejects.toMatchObject({ code: '23P01' })
   })
 
   it('rejected, cancelled and expired bookings do not block', async () => {
-    for (const [i, status] of ['rejected', 'cancelled', 'expired', 'completed'].entries()) {
+    for (const [i, status] of [
+      'rejected',
+      'cancelled',
+      'expired',
+      'completed',
+    ].entries()) {
       const start = daysFromNow(100 + i * 10)
       const end = daysFromNow(102 + i * 10)
       await insertBooking(db, s, start, end, status)
@@ -221,12 +261,17 @@ describe('0032: advance_booking_lifecycle expiry', () => {
     expect(notes.rows.map((r) => r.user_id).sort()).toEqual(
       [s.renter.id, s.owner.id].sort(),
     )
-    const events = await db.query<{ actor_id: string | null; from_status: string }>(
+    const events = await db.query<{
+      actor_id: string | null
+      from_status: string
+    }>(
       `select actor_id, from_status from public.booking_events
         where booking_id = $1 and to_status = 'expired'`,
       [stale.id],
     )
-    expect(events.rows).toEqual([{ actor_id: null, from_status: 'pending_owner_review' }])
+    expect(events.rows).toEqual([
+      { actor_id: null, from_status: 'pending_owner_review' },
+    ])
 
     // The expired request no longer blocks its dates.
     await createBooking(db, s.renter.id, s.billboard.id, {
@@ -307,7 +352,9 @@ describe('0032: advance_booking_lifecycle expiry', () => {
       `select public.platform_today() = (now() at time zone 'UTC')::date as ok`,
     )
     expect(utc.rows[0].ok).toBe(true)
-    await db.query(`update public.platform_settings set timezone = 'Asia/Colombo'`)
+    await db.query(
+      `update public.platform_settings set timezone = 'Asia/Colombo'`,
+    )
   })
 
   it('anon cannot run it', async () => {
@@ -331,7 +378,12 @@ describe('0032: create_campaign', () => {
     await db?.close()
   })
 
-  function campaign(userId: string, ids: string[], start = daysFromNow(10), end = daysFromNow(12)) {
+  function campaign(
+    userId: string,
+    ids: string[],
+    start = daysFromNow(10),
+    end = daysFromNow(12),
+  ) {
     return asUser(db, userId, (tx) =>
       rpc<{ id: string }>(tx, 'create_campaign', {
         p_name: 'Launch',
@@ -344,7 +396,8 @@ describe('0032: create_campaign', () => {
 
   it('caps a campaign at 20 billboards', async () => {
     const ids: string[] = []
-    for (let i = 0; i < 21; i++) ids.push((await createBillboard(db, s.owner.id)).id)
+    for (let i = 0; i < 21; i++)
+      ids.push((await createBillboard(db, s.owner.id)).id)
     await expect(campaign(s.renter.id, ids)).rejects.toThrow(
       'A campaign can include at most 20 billboards',
     )
@@ -367,7 +420,9 @@ describe('0032: create_campaign', () => {
       'Only renter accounts can request bookings',
     )
 
-    const inactive = await createBillboard(db, s.owner.id, { status: 'inactive' })
+    const inactive = await createBillboard(db, s.owner.id, {
+      status: 'inactive',
+    })
     const free = await createBillboard(db, s.owner.id)
     // Duplicate ids are collapsed instead of failing the whole campaign.
     const c = await campaign(
@@ -376,7 +431,11 @@ describe('0032: create_campaign', () => {
       daysFromNow(60),
       daysFromNow(61),
     )
-    const { rows } = await db.query<{ billboard_id: string; status: string; failure_reason: string | null }>(
+    const { rows } = await db.query<{
+      billboard_id: string
+      status: string
+      failure_reason: string | null
+    }>(
       `select billboard_id, status, failure_reason from public.campaign_items where campaign_id = $1`,
       [c.id],
     )
@@ -404,8 +463,20 @@ describe('0032: get_billboard_booked_ranges', () => {
 
   it('anon sees only blocking, current/future ranges, ordered, without renter info', async () => {
     await insertBooking(db, s, daysFromNow(30), daysFromNow(32), 'confirmed')
-    await insertBooking(db, s, daysFromNow(10), daysFromNow(12), 'pending_owner_review')
-    await insertBooking(db, s, daysFromNow(20), daysFromNow(21), 'payment_pending')
+    await insertBooking(
+      db,
+      s,
+      daysFromNow(10),
+      daysFromNow(12),
+      'pending_owner_review',
+    )
+    await insertBooking(
+      db,
+      s,
+      daysFromNow(20),
+      daysFromNow(21),
+      'payment_pending',
+    )
     await insertBooking(db, s, daysFromNow(-1), daysFromNow(2), 'active')
     await insertBooking(db, s, daysFromNow(-10), daysFromNow(-5), 'completed')
     await insertBooking(db, s, daysFromNow(-10), daysFromNow(-8), 'active') // stale, already ended
@@ -429,7 +500,9 @@ describe('0032: get_billboard_booked_ranges', () => {
     ])
 
     const authed = await asUser(db, s.renter.id, (tx) =>
-      rpc(tx, 'get_billboard_booked_ranges', { p_billboard_id: s.billboard.id }),
+      rpc(tx, 'get_billboard_booked_ranges', {
+        p_billboard_id: s.billboard.id,
+      }),
     )
     expect(authed).toHaveLength(4)
   })
@@ -469,7 +542,9 @@ describe('0032: overlap cleanup on existing data', () => {
     db = await createDb()
     s = await seedMarketplace(db)
     // Simulate pre-0032 data: drop the constraint and write overlaps directly.
-    await db.query(`alter table public.bookings drop constraint bookings_no_overlap`)
+    await db.query(
+      `alter table public.bookings drop constraint bookings_no_overlap`,
+    )
   })
   afterAll(async () => {
     await db?.close()
@@ -478,25 +553,91 @@ describe('0032: overlap cleanup on existing data', () => {
   it('keeps paid then earliest bookings, cancels the rest, flags paid-vs-paid', async () => {
     const t = (h: number) => new Date(Date.now() - h * 3600_000).toISOString()
     // Group 1: earliest pending wins over a later pending and a later payment_pending.
-    const p1 = await insertBooking(db, s, daysFromNow(10), daysFromNow(15), 'pending_owner_review', t(50))
-    const p2 = await insertBooking(db, s, daysFromNow(12), daysFromNow(13), 'pending_owner_review', t(40))
-    const p3 = await insertBooking(db, s, daysFromNow(15), daysFromNow(18), 'payment_pending', t(30))
+    const p1 = await insertBooking(
+      db,
+      s,
+      daysFromNow(10),
+      daysFromNow(15),
+      'pending_owner_review',
+      t(50),
+    )
+    const p2 = await insertBooking(
+      db,
+      s,
+      daysFromNow(12),
+      daysFromNow(13),
+      'pending_owner_review',
+      t(40),
+    )
+    const p3 = await insertBooking(
+      db,
+      s,
+      daysFromNow(15),
+      daysFromNow(18),
+      'payment_pending',
+      t(30),
+    )
     // Group 2: a later confirmed booking beats an earlier pending one.
-    const g2pending = await insertBooking(db, s, daysFromNow(30), daysFromNow(32), 'pending_owner_review', t(50))
-    const g2paid = await insertBooking(db, s, daysFromNow(31), daysFromNow(33), 'confirmed', t(10))
+    const g2pending = await insertBooking(
+      db,
+      s,
+      daysFromNow(30),
+      daysFromNow(32),
+      'pending_owner_review',
+      t(50),
+    )
+    const g2paid = await insertBooking(
+      db,
+      s,
+      daysFromNow(31),
+      daysFromNow(33),
+      'confirmed',
+      t(10),
+    )
     // Group 3: two paid bookings overlap — neither is changed, the later one is flagged.
-    const g3a = await insertBooking(db, s, daysFromNow(50), daysFromNow(52), 'confirmed', t(50))
-    const g3b = await insertBooking(db, s, daysFromNow(51), daysFromNow(53), 'active', t(40))
+    const g3a = await insertBooking(
+      db,
+      s,
+      daysFromNow(50),
+      daysFromNow(52),
+      'confirmed',
+      t(50),
+    )
+    const g3b = await insertBooking(
+      db,
+      s,
+      daysFromNow(51),
+      daysFromNow(53),
+      'active',
+      t(40),
+    )
     // Non-overlapping and non-blocking rows are untouched.
-    const lone = await insertBooking(db, s, daysFromNow(70), daysFromNow(71), 'pending_owner_review', t(5))
-    const oldRejected = await insertBooking(db, s, daysFromNow(10), daysFromNow(15), 'rejected', t(60))
+    const lone = await insertBooking(
+      db,
+      s,
+      daysFromNow(70),
+      daysFromNow(71),
+      'pending_owner_review',
+      t(5),
+    )
+    const oldRejected = await insertBooking(
+      db,
+      s,
+      daysFromNow(10),
+      daysFromNow(15),
+      'rejected',
+      t(60),
+    )
 
     const { rows } = await db.query<{ n: number }>(
       `select public.cleanup_overlapping_bookings() as n`,
     )
     expect(rows[0].n).toBe(3)
 
-    expect(await statusOf(db, p1)).toEqual({ status: 'pending_owner_review', rejection_reason: null })
+    expect(await statusOf(db, p1)).toEqual({
+      status: 'pending_owner_review',
+      rejection_reason: null,
+    })
     for (const id of [p2, p3, g2pending]) {
       expect(await statusOf(db, id)).toEqual({
         status: 'cancelled',
@@ -524,7 +665,13 @@ describe('0032: overlap cleanup on existing data', () => {
     // dates covered only by the grandfathered booking.
     await db.query(ADD_CONSTRAINT)
     await expect(
-      request(db, s.renter.id, s.billboard.id, daysFromNow(53), daysFromNow(53)),
+      request(
+        db,
+        s.renter.id,
+        s.billboard.id,
+        daysFromNow(53),
+        daysFromNow(53),
+      ),
     ).rejects.toThrow('Selected dates overlap an existing booking')
   })
 })

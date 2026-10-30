@@ -15,7 +15,11 @@ import {
 import type { ReactNode } from 'react'
 import { Button } from '@/components'
 import { cn } from '@/lib/utils'
-import type { TimelineActor, TimelineStage, TimelineStageState } from './bookingTimelineLogic'
+import type {
+  TimelineActor,
+  TimelineStage,
+  TimelineStageState,
+} from './bookingTimelineLogic'
 import { ProofOfPostingGallery } from './ProofOfPostingGallery'
 
 const STAGE_ICON: Record<string, LucideIcon> = {
@@ -53,19 +57,33 @@ const LABEL_CLASSES: Record<TimelineStageState, string> = {
   blocked: 'text-brand-error',
 }
 
-function actorLabel(actor: TimelineActor | undefined, viewerRole: 'renter' | 'owner'): string | null {
+function actorLabel(
+  actor: TimelineActor | undefined,
+  viewerRole: 'renter' | 'owner',
+): string | null {
   if (!actor) return null
   if (actor === 'platform') return "We'll update this automatically"
-  if (actor === 'customer') return viewerRole === 'renter' ? 'Action needed from you' : 'Waiting on the renter'
-  return viewerRole === 'owner' ? 'Action needed from you' : 'Waiting on the owner'
+  if (actor === 'customer')
+    return viewerRole === 'renter'
+      ? 'Action needed from you'
+      : 'Waiting on the renter'
+  return viewerRole === 'owner'
+    ? 'Action needed from you'
+    : 'Waiting on the owner'
 }
 
 function formatStageTimestamp(iso: string | undefined): string | null {
   if (!iso) return null
   const d = new Date(iso)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+  return (
+    d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }) +
     ' · ' +
     d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  )
 }
 
 interface BookingTimelineProps {
@@ -81,8 +99,12 @@ export function BookingTimeline({
   primaryCta,
   secondaryActions,
 }: BookingTimelineProps) {
-  const current = stages.find((s) => s.state === 'current' || s.state === 'blocked')
-  const proofBookingId = stages.find((s) => s.key === 'posted' && s.proofBookingId)?.proofBookingId
+  const current = stages.find(
+    (s) => s.state === 'current' || s.state === 'blocked',
+  )
+  const proofBookingId = stages.find(
+    (s) => s.key === 'posted' && s.proofBookingId,
+  )?.proofBookingId
 
   return (
     <div className="space-y-5">
@@ -91,7 +113,10 @@ export function BookingTimeline({
           const Icon = STAGE_ICON[stage.key] ?? Eye
           const isLast = i === stages.length - 1
           return (
-            <div key={stage.key} className="flex gap-3 sm:flex-1 sm:flex-col sm:items-center sm:gap-0">
+            <div
+              key={stage.key}
+              className="flex gap-3 sm:flex-1 sm:flex-col sm:items-center sm:gap-0"
+            >
               <div className="flex flex-col items-center sm:w-full sm:flex-row">
                 <div
                   className={cn(
@@ -133,16 +158,14 @@ export function BookingTimeline({
       {proofBookingId && <ProofOfPostingGallery bookingId={proofBookingId} />}
 
       {current?.description && (
-        <div
-          className={cn(
-            'border-t border-ink/10 pt-4 dark:border-paper/10',
-          )}
-        >
+        <div className={cn('border-t border-ink/10 pt-4 dark:border-paper/10')}>
           <div className="flex flex-wrap items-center gap-2">
             <span
               className={cn(
                 'font-mono text-xs font-semibold tracking-wide uppercase',
-                current.state === 'blocked' ? 'text-brand-error' : 'text-accent',
+                current.state === 'blocked'
+                  ? 'text-brand-error'
+                  : 'text-accent',
               )}
             >
               {current.label}
@@ -153,12 +176,18 @@ export function BookingTimeline({
               </span>
             )}
           </div>
-          <p className="mt-2 text-sm text-ink/70 dark:text-paper/70">{current.description}</p>
+          <p className="mt-2 text-sm text-ink/70 dark:text-paper/70">
+            {current.description}
+          </p>
 
           {(primaryCta || secondaryActions) && (
             <div className="mt-3 flex flex-wrap gap-2">
               {primaryCta && (
-                <Button size="sm" onClick={primaryCta.onClick} disabled={primaryCta.pending}>
+                <Button
+                  size="sm"
+                  onClick={primaryCta.onClick}
+                  disabled={primaryCta.pending}
+                >
                   {primaryCta.pending ? 'Working…' : primaryCta.label}
                 </Button>
               )}

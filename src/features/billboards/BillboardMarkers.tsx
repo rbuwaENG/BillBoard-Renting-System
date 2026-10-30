@@ -105,7 +105,9 @@ export function BillboardMarkers({
                   <p className="mt-1 flex items-center gap-1.5 text-[11px] text-ink/60 dark:text-paper/60">
                     <span
                       className="inline-block size-1.5 rounded-full"
-                      style={{ background: TRAFFIC_COLORS[billboard.trafficLevel] }}
+                      style={{
+                        background: TRAFFIC_COLORS[billboard.trafficLevel],
+                      }}
                     />
                     {TRAFFIC_LABELS[billboard.trafficLevel]}
                   </p>

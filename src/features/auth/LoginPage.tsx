@@ -40,11 +40,7 @@ export function LoginPage() {
 
     const userId = data.user?.id
     const { data: profile } = userId
-      ? await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', userId)
-          .single()
+      ? await supabase.from('profiles').select('role').eq('id', userId).single()
       : { data: null }
 
     navigate(next ?? ROLE_HOME[(profile?.role as UserRole) ?? 'renter'], {
@@ -120,7 +116,10 @@ export function LoginPage() {
               )}
             </label>
             <p className="-mt-3 text-right text-xs">
-              <Link to="/forgot-password" className="text-accent hover:underline">
+              <Link
+                to="/forgot-password"
+                className="text-accent hover:underline"
+              >
                 Forgot password?
               </Link>
             </p>

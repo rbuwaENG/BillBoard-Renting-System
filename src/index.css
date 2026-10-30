@@ -14,7 +14,8 @@
   --color-brand-error: #c81e3a;
 
   --font-display: 'Inter Variable', 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  --font-mono:
+    'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
 }
 
 :root {
@@ -63,13 +64,7 @@ body {
 /* A cut top-right corner — the recurring "ticket stub" motif tying buttons,
    badges, and cards back to the billboard/print-poster brand mark. */
 .clip-corner {
-  clip-path: polygon(
-    0 0,
-    calc(100% - 10px) 0,
-    100% 10px,
-    100% 100%,
-    0 100%
-  );
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
 }
 
 /* "You are here" radar pulse around the current-location marker. */

@@ -59,11 +59,14 @@ export function PaymentHistoryTab() {
                     {p.billboardTitle}
                   </p>
                   <p className="mt-0.5 font-mono text-[11px] tracking-wide text-ink/50 uppercase dark:text-paper/50">
-                    {new Date(p.confirmedAt ?? p.createdAt).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
+                    {new Date(p.confirmedAt ?? p.createdAt).toLocaleDateString(
+                      'en-US',
+                      {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      },
+                    )}
                   </p>
                 </div>
                 <Badge className={STATUS_CLASSES[p.status]}>

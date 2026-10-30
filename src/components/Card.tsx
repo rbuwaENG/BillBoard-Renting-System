@@ -18,7 +18,12 @@ function CornerTicks() {
   )
 }
 
-export function Card({ className, ticks = false, children, ...props }: CardProps) {
+export function Card({
+  className,
+  ticks = false,
+  children,
+  ...props
+}: CardProps) {
   return (
     <div
       className={cn(

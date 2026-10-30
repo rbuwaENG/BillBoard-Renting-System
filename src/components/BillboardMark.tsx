@@ -33,7 +33,13 @@ export function BillboardMark({ className }: { className?: string }) {
         strokeLinecap="square"
         opacity="0.4"
       />
-      <path d="M6.5 14.5l5-6 4 4.5 4-5.5 6 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M6.5 14.5l5-6 4 4.5 4-5.5 6 7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }

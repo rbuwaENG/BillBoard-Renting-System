@@ -15,8 +15,16 @@ const ROLE_HOME: Record<UserRole, string> = {
 }
 
 const SIGNUP_ROLES: { role: UserRole; label: string; hint: string }[] = [
-  { role: 'renter', label: 'Renter', hint: 'Rent billboard space to advertise' },
-  { role: 'rentor', label: 'Owner', hint: 'List and manage your own billboards' },
+  {
+    role: 'renter',
+    label: 'Renter',
+    hint: 'Rent billboard space to advertise',
+  },
+  {
+    role: 'rentor',
+    label: 'Owner',
+    hint: 'List and manage your own billboards',
+  },
 ]
 
 const signupSchema = z.object({
@@ -64,9 +72,12 @@ export function SignupPage() {
 
     if (data.session) {
       // `next` only makes sense for renters (it points at a renter action).
-      navigate(values.role === 'renter' && next ? next : ROLE_HOME[values.role], {
-        replace: true,
-      })
+      navigate(
+        values.role === 'renter' && next ? next : ROLE_HOME[values.role],
+        {
+          replace: true,
+        },
+      )
     } else {
       setConfirmationSent(true)
     }
@@ -83,7 +94,10 @@ export function SignupPage() {
           We sent a confirmation link to finish creating your account. Once
           confirmed, log in to continue.
         </p>
-        <Link to={loginPath(next)} className="mt-6 text-sm text-accent hover:underline">
+        <Link
+          to={loginPath(next)}
+          className="mt-6 text-sm text-accent hover:underline"
+        >
           Go to log in
         </Link>
       </div>

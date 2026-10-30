@@ -1,3 +1,4 @@
 dist
 functions/lib
 node_modules
+.claude

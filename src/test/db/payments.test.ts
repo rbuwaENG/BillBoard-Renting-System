@@ -63,10 +63,10 @@ function submit(db: Db, userId: string, bookingId: string, reference?: string) {
 }
 
 async function bookingStatus(db: Db, id: string) {
-  const { rows } = await db.query<{ status: string; payment_id: string | null }>(
-    `select status, payment_id from public.bookings where id = $1`,
-    [id],
-  )
+  const { rows } = await db.query<{
+    status: string
+    payment_id: string | null
+  }>(`select status, payment_id from public.bookings where id = $1`, [id])
   return rows[0]
 }
 
@@ -192,17 +192,19 @@ describe('0031: renter_submit_payment', () => {
 
   it('a suspended renter cannot submit', async () => {
     const booking = await approvedBooking(db, s)
-    await db.query(`update public.profiles set status = 'suspended' where id = $1`, [
-      s.renter.id,
-    ])
+    await db.query(
+      `update public.profiles set status = 'suspended' where id = $1`,
+      [s.renter.id],
+    )
     try {
       await expect(submit(db, s.renter.id, booking.id)).rejects.toThrow(
         'Account suspended',
       )
     } finally {
-      await db.query(`update public.profiles set status = 'active' where id = $1`, [
-        s.renter.id,
-      ])
+      await db.query(
+        `update public.profiles set status = 'active' where id = $1`,
+        [s.renter.id],
+      )
     }
   })
 })
@@ -223,7 +225,12 @@ describe('0031: admin_confirm_payment / admin_reject_payment', () => {
     const booking = await approvedBooking(db, s)
     await submit(db, s.renter.id, booking.id)
     await expect(
-      confirmPayment(db, s.admin.id, booking.id, Number(booking.price_quoted) - 1),
+      confirmPayment(
+        db,
+        s.admin.id,
+        booking.id,
+        Number(booking.price_quoted) - 1,
+      ),
     ).rejects.toThrow('Amount does not match quoted price')
     expect((await bookingStatus(db, booking.id)).status).toBe('payment_pending')
   })
@@ -231,7 +238,11 @@ describe('0031: admin_confirm_payment / admin_reject_payment', () => {
   it('promotes the pending payment and confirms the booking', async () => {
     const booking = await approvedBooking(db, s)
     const pending = await submit(db, s.renter.id, booking.id, 'RENTER-REF')
-    const confirmed = (await confirmPayment(db, s.admin.id, booking.id)) as unknown as PaymentRow
+    const confirmed = (await confirmPayment(
+      db,
+      s.admin.id,
+      booking.id,
+    )) as unknown as PaymentRow
     expect(confirmed).toMatchObject({
       id: pending.id,
       status: 'succeeded',
@@ -273,7 +284,10 @@ describe('0031: admin_confirm_payment / admin_reject_payment', () => {
       )
       await expect(
         asUser(db, uid, (tx) =>
-          rpc(tx, 'admin_reject_payment', { p_payment_id: payment.id, p_reason: 'x' }),
+          rpc(tx, 'admin_reject_payment', {
+            p_payment_id: payment.id,
+            p_reason: 'x',
+          }),
         ),
       ).rejects.toThrow('Only an admin can reject a payment')
     }
@@ -287,7 +301,10 @@ describe('0031: admin_confirm_payment / admin_reject_payment', () => {
     ).rejects.toThrow()
     await expect(
       asAnon(db, (tx) =>
-        rpc(tx, 'admin_reject_payment', { p_payment_id: payment.id, p_reason: 'x' }),
+        rpc(tx, 'admin_reject_payment', {
+          p_payment_id: payment.id,
+          p_reason: 'x',
+        }),
       ),
     ).rejects.toThrow()
     const { rows } = await db.query<{ status: string }>(
@@ -325,7 +342,10 @@ describe('0031: admin_confirm_payment / admin_reject_payment', () => {
     // Only pending payments can be rejected.
     await expect(
       asUser(db, s.admin.id, (tx) =>
-        rpc(tx, 'admin_reject_payment', { p_payment_id: payment.id, p_reason: 'again' }),
+        rpc(tx, 'admin_reject_payment', {
+          p_payment_id: payment.id,
+          p_reason: 'again',
+        }),
       ),
     ).rejects.toThrow('Only a pending payment can be rejected')
 

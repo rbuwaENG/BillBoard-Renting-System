@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { getDisplayPrice, resolveEffectivePricePerDay } from './pricing'
 
-const BASE = { pricePerDay: 100, salePricePerDay: null, adminPriceOverridePerDay: null }
+const BASE = {
+  pricePerDay: 100,
+  salePricePerDay: null,
+  adminPriceOverridePerDay: null,
+}
 
 describe('resolveEffectivePricePerDay', () => {
   it('falls back to the base price when nothing else is set', () => {
@@ -9,11 +13,15 @@ describe('resolveEffectivePricePerDay', () => {
   })
 
   it('uses the sale price when lower than base', () => {
-    expect(resolveEffectivePricePerDay({ ...BASE, salePricePerDay: 80 })).toBe(80)
+    expect(resolveEffectivePricePerDay({ ...BASE, salePricePerDay: 80 })).toBe(
+      80,
+    )
   })
 
   it('ignores a sale price that is not actually lower', () => {
-    expect(resolveEffectivePricePerDay({ ...BASE, salePricePerDay: 120 })).toBe(100)
+    expect(resolveEffectivePricePerDay({ ...BASE, salePricePerDay: 120 })).toBe(
+      100,
+    )
   })
 
   it('admin override wins over sale price', () => {
@@ -69,13 +77,22 @@ describe('resolveEffectivePricePerDay', () => {
 
   it('skips tier matching entirely when days is omitted (browse-time estimate)', () => {
     const tiers = [{ minDays: 1, maxDays: null, pricePerDay: 70 }]
-    expect(resolveEffectivePricePerDay({ ...BASE, salePricePerDay: 80 }, undefined, tiers)).toBe(80)
+    expect(
+      resolveEffectivePricePerDay(
+        { ...BASE, salePricePerDay: 80 },
+        undefined,
+        tiers,
+      ),
+    ).toBe(80)
   })
 })
 
 describe('getDisplayPrice', () => {
   it('returns no strikethrough when there is no discount', () => {
-    expect(getDisplayPrice(BASE)).toEqual({ price: 100, strikethroughFrom: null })
+    expect(getDisplayPrice(BASE)).toEqual({
+      price: 100,
+      strikethroughFrom: null,
+    })
   })
 
   it('strikes through the base price when a sale price applies', () => {

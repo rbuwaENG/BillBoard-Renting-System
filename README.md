@@ -32,14 +32,14 @@ The app runs at `http://localhost:5173`.
 
 ## Scripts
 
-| Command           | Description                              |
-| ------------------ | ----------------------------------------- |
-| `npm run dev`      | Start the Vite dev server                 |
-| `npm run build`    | Type-check and build for production        |
-| `npm run lint`     | Run ESLint                                 |
-| `npm run test`     | Run the Vitest unit/component suite (offline, no env needed) |
-| `npm run test:db`  | Apply all migrations to an in-process Postgres (PGlite) and run the RLS/RPC tests |
-| `npm run format`   | Format the codebase with Prettier          |
+| Command           | Description                                                                       |
+| ----------------- | --------------------------------------------------------------------------------- |
+| `npm run dev`     | Start the Vite dev server                                                         |
+| `npm run build`   | Type-check and build for production                                               |
+| `npm run lint`    | Run ESLint                                                                        |
+| `npm run test`    | Run the Vitest unit/component suite (offline, no env needed)                      |
+| `npm run test:db` | Apply all migrations to an in-process Postgres (PGlite) and run the RLS/RPC tests |
+| `npm run format`  | Format the codebase with Prettier                                                 |
 
 ## Project layout
 

@@ -45,7 +45,11 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     // Database tests run under node via `npm run test:db` (vitest.db.config.ts).
-    exclude: [...configDefaults.exclude, 'src/test/db/**', '.claude/worktrees/**'],
+    exclude: [
+      ...configDefaults.exclude,
+      'src/test/db/**',
+      '.claude/worktrees/**',
+    ],
     // Several suites render real Supabase clients / Leaflet maps; the
     // default multi-worker thread pool reliably OOMs on memory-constrained
     // runners. A single fork is slower but deterministic.

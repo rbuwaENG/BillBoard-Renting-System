@@ -8,13 +8,14 @@ Reference inspiration: [sapta28/QGIS_Backend_Project](https://github.com/sapta28
 
 Three roles, stored as a `role` column on the `profiles` table (Postgres), checked in Row Level Security policies and RPC functions via a `current_role()` helper (no separate auth claim — the table is the single source of truth):
 
-| Role | Who | Core capabilities |
-|---|---|---|
-| **Renter** | Advertiser looking to rent ad space | Browse/search billboards on map & list, view details, submit booking requests, upload creative/design, pay, track booking status, rate a completed booking |
-| **Rentor** | Billboard owner | Add/edit/deactivate their own billboards (location, size, price, images, availability), review & approve/reject booking requests made against *their* billboards, view earnings/payout history |
-| **Admin** | Platform operator | Manage categories/sizes/pricing tiers, manage users (suspend/ban), moderate flagged billboards, view platform-wide analytics & revenue, resolve disputes |
+| Role       | Who                                 | Core capabilities                                                                                                                                                                              |
+| ---------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Renter** | Advertiser looking to rent ad space | Browse/search billboards on map & list, view details, submit booking requests, upload creative/design, pay, track booking status, rate a completed booking                                     |
+| **Rentor** | Billboard owner                     | Add/edit/deactivate their own billboards (location, size, price, images, availability), review & approve/reject booking requests made against _their_ billboards, view earnings/payout history |
+| **Admin**  | Platform operator                   | Manage categories/sizes/pricing tiers, manage users (suspend/ban), moderate flagged billboards, view platform-wide analytics & revenue, resolve disputes                                       |
 
 **Approval model (per clarified requirements):**
+
 - Billboard listing CRUD by a Rentor is **instant-publish** — no admin approval queue for creating/editing a billboard.
 - **Booking requests are the thing that queues**: when a Renter requests a booking, it lands in a `pending` queue scoped to that billboard's **owning Rentor**, who approves or rejects it (not a global Admin queue). This mirrors "each owner approves their own" from the requirements.
 - Admin has override/moderation powers (can unpublish/flag a billboard, or step into a dispute) but is not in the critical path of every listing or booking.
@@ -24,6 +25,7 @@ Three roles, stored as a `role` column on the `profiles` table (Postgres), check
 ## 2. Tech Stack
 
 ### Frontend
+
 - **React 19** + **Vite** + **TypeScript**
 - **React Router v6** — routing, with role-gated route guards
 - **TanStack Query** — server-state caching over Firestore/Functions calls
@@ -34,18 +36,20 @@ Three roles, stored as a `role` column on the `profiles` table (Postgres), check
 - **shadcn/ui or Radix primitives** — accessible component base
 
 ### Backend (Supabase)
+
 - **Supabase Auth** — email/password (+ Google sign-in later); role lives in the `profiles` table, set on signup via a `handle_new_user` trigger
 - **Postgres (Supabase)** — primary database, with **PostGIS** for native geo queries (radius search via `ST_DWithin`, no geohash workaround needed)
 - **Supabase Storage** — billboard images, booking creative/design uploads
 - **Postgres RPC functions (`security definer`)** — privileged writes/state transitions: `request_booking`, `respond_to_booking`
 - **Row Level Security (RLS)** — per-table policies enforce the security model directly in Postgres
-- **Supabase Edge Functions** *(future, payments phase)* — Stripe Checkout session creation + webhook handling
+- **Supabase Edge Functions** _(future, payments phase)_ — Stripe Checkout session creation + webhook handling
 - **Stripe** (via Edge Functions + Webhooks) — payment processing
-- **Supabase Realtime** *(optional, notifications/chat phase)* — push updates on booking status change / messages
+- **Supabase Realtime** _(optional, notifications/chat phase)_ — push updates on booking status change / messages
 
 ### Tooling
+
 - **Vitest + React Testing Library** — unit/component tests
-- **Supabase CLI / local dev stack** *(optional)* — local Postgres/Auth/Storage for offline development
+- **Supabase CLI / local dev stack** _(optional)_ — local Postgres/Auth/Storage for offline development
 - **ESLint + Prettier** — lint/format
 - **GitHub Actions** — CI (lint, test, build) + CD (deploy static build to hosting of choice on merge to `main`)
 
@@ -120,9 +124,9 @@ notifications
 - **RPC functions** are the single source of truth for state transitions:
   - `request_booking` — validates the billboard is active and dates don't overlap an existing non-terminal booking, creates booking as `pending_owner_review`.
   - `respond_to_booking` (Rentor-only, ownership-checked) — approve → `payment_pending`, or reject → `rejected` with `rejection_reason`.
-  - `create_checkout_session` *(future, payments phase)* — Renter pays after approval; creates Stripe session via an Edge Function.
-  - `stripe-webhook` *(future, Edge Function)* — on `payment_intent.succeeded`, marks booking `confirmed` and payment `succeeded`.
-  - `on_booking_status_change` *(future, trigger)* — writes a notification row for the affected user(s).
+  - `create_checkout_session` _(future, payments phase)_ — Renter pays after approval; creates Stripe session via an Edge Function.
+  - `stripe-webhook` _(future, Edge Function)_ — on `payment_intent.succeeded`, marks booking `confirmed` and payment `succeeded`.
+  - `on_booking_status_change` _(future, trigger)_ — writes a notification row for the affected user(s).
 
 ---
 
@@ -186,7 +190,7 @@ supabase/
 8. **Notifications** — in-app notification bell, written by Postgres triggers on booking/review events and payout RPCs, live via Supabase Realtime. ✅ done.
 9. **Admin panel** — categories/sizes management, user management (suspend), billboard moderation (flag/unpublish), platform analytics dashboard, payments confirmation, payouts. ✅ done.
 10. **Reviews & polish** — post-completion review/rating (`submit_review` RPC, renter "Leave a review" dialog, billboard rating auto-recalculated by trigger). ✅ done.
-11. **Testing & hardening** — Vitest coverage on the new hooks/components (reviews, payments, payouts, chat, campaigns, creative upload, booking inbox) via a reusable Supabase client mock. *(RLS/pgTAP-level DB tests still not attempted — see Open Items)*
+11. **Testing & hardening** — Vitest coverage on the new hooks/components (reviews, payments, payouts, chat, campaigns, creative upload, booking inbox) via a reusable Supabase client mock. _(RLS/pgTAP-level DB tests still not attempted — see Open Items)_
 12. **CI/CD & deploy** — GitHub Actions pipeline (lint/test/build), deployed to Vercel.
 
 13. **Hardening round 1** — security/integrity migrations 0029–0035 (function privileges, null-safe auth checks, billboard field protection, profile PII column grants, renter-submits/admin-confirms payments, exclusion constraint + expiry, proof of posting, admin audit log, review fixes), an in-process Postgres test harness (`npm run test:db`, PGlite) with RLS/RPC tests, route code-splitting + error boundaries, offline unit tests, and renter/owner/admin UX fixes (gallery, availability calendar, password reset, shareable billboard pages). ✅ done.

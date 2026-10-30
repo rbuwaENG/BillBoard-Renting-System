@@ -19,10 +19,17 @@ function wrapper({ children }: { children: ReactNode }) {
 
 describe('useSubmitReview', () => {
   it('calls submit_review with the rating and comment', async () => {
-    vi.mocked(supabase.rpc).mockResolvedValueOnce({ data: { id: 'review-1' }, error: null } as never)
+    vi.mocked(supabase.rpc).mockResolvedValueOnce({
+      data: { id: 'review-1' },
+      error: null,
+    } as never)
 
     const { result } = renderHook(() => useSubmitReview(), { wrapper })
-    result.current.mutate({ bookingId: 'booking-1', rating: 4, comment: 'Great spot' })
+    result.current.mutate({
+      bookingId: 'booking-1',
+      rating: 4,
+      comment: 'Great spot',
+    })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
