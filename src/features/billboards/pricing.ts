@@ -62,3 +62,26 @@ export function getDisplayPrice(billboard: PricedBillboard): DisplayPrice {
     strikethroughFrom: price < billboard.pricePerDay ? billboard.pricePerDay : null,
   }
 }
+
+// What request_booking will quote for `days` days (rate × days).
+export function estimateBookingTotal(
+  billboard: PricedBillboard,
+  days: number,
+  tiers?: PricingTierLike[],
+): number {
+  if (days <= 0) return 0
+  return resolveEffectivePricePerDay(billboard, days, tiers) * days
+}
+
+// Cart / campaign estimate: each billboard priced with its own tiers for the
+// shared date range, exactly as create_campaign → request_booking will.
+export function estimateCartTotal(
+  billboards: (PricedBillboard & { id: string })[],
+  days: number,
+  tiersByBillboard: Record<string, PricingTierLike[] | undefined>,
+): number {
+  return billboards.reduce(
+    (sum, b) => sum + estimateBookingTotal(b, days, tiersByBillboard[b.id]),
+    0,
+  )
+}

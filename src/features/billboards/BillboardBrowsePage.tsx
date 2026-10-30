@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react'
+import { X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { MapContainer, TileLayer, ZoomControl } from 'react-leaflet'
+import { useSearchParams } from 'react-router-dom'
 import { RenterBookingsControl } from '@/features/renter'
 import { useMyBookings } from '@/features/renter/useMyBookings'
 import { useAdvanceBookingLifecycle } from '@/hooks/useAdvanceBookingLifecycle'
@@ -12,8 +14,12 @@ import { BillboardPanel } from './BillboardPanel'
 import { CurrentLocationLayer } from './CurrentLocationLayer'
 import type { LocateStatus } from './locateStatus'
 import { MapOverlayControls } from './MapOverlayControls'
+import { useMapPopoverStore, type ActivityTabKey } from './mapPopoverStore'
 import { TrafficLegend } from './TrafficLegend'
-import { useBillboards, useBillboardsNear, type BillboardWithDetails } from './useBillboards'
+import { useBillboard } from './useBillboard'
+import { useBillboards, useBillboardsNear } from './useBillboards'
+
+const ACTIVITY_TABS: ActivityTabKey[] = ['bookings', 'payments', 'campaigns', 'messages']
 
 const DEFAULT_CENTER: [number, number] = [20.5937, 78.9629]
 const MIN_ZOOM = 3
@@ -35,9 +41,17 @@ const TILE_ATTRIBUTION =
 
 export function BillboardBrowsePage() {
   useAdvanceBookingLifecycle()
-  const { role } = useAuth()
-  const { data: billboardsData } = useBillboards()
+  const { role, isLoading: authLoading } = useAuth()
+  const {
+    data: billboardsData,
+    isLoading: billboardsLoading,
+    isError: billboardsError,
+    error: billboardsErrorValue,
+    refetch: refetchBillboards,
+  } = useBillboards()
   const { data: myBookings } = useMyBookings()
+  const openActivity = useMapPopoverStore((s) => s.openActivity)
+  const [searchParams, setSearchParams] = useSearchParams()
   const billboards = useMemo(() => billboardsData ?? [], [billboardsData])
   const myBillboardIds = useMemo(
     () => new Set((myBookings ?? []).map((b) => b.billboardId)),
@@ -47,8 +61,8 @@ export function BillboardBrowsePage() {
   const [locateStatus, setLocateStatus] = useState<LocateStatus>('locating')
   const [userCoords, setUserCoords] = useState<[number, number] | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [detailBillboard, setDetailBillboard] =
-    useState<BillboardWithDetails | null>(null)
+  const [detailId, setDetailId] = useState<string | null>(null)
+  const [detailBookingId, setDetailBookingId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
     new Set(),
@@ -107,11 +121,75 @@ export function BillboardBrowsePage() {
     [nearMeActive, nearBillboardsData, billboards],
   )
 
-  function handleSelect(id: string) {
+  // Look the selection up in what's already loaded; only fetch it on its own
+  // when it isn't in the active listing (e.g. "View on map" for a booking
+  // whose billboard has since been unlisted, or a deep link).
+  const listedDetail = useMemo(
+    () =>
+      detailId
+        ? (billboards.find((b) => b.id === detailId) ??
+          nearBillboardsData?.find((b) => b.id === detailId) ??
+          null)
+        : null,
+    [detailId, billboards, nearBillboardsData],
+  )
+  const needsFetch = !!detailId && !listedDetail && !billboardsLoading
+  const fetchedDetail = useBillboard(needsFetch ? detailId : null)
+  const detailBillboard =
+    listedDetail ?? (needsFetch ? (fetchedDetail.data ?? null) : null)
+  const unlistedNotice =
+    needsFetch && fetchedDetail.isFetched && !fetchedDetail.data
+      ? fetchedDetail.isError
+        ? "Couldn't load that billboard. Please try again."
+        : 'That billboard is no longer listed, so it can’t be shown on the map.'
+      : null
+
+  function handleSelect(id: string, bookingId: string | null = null) {
     setSelectedId(id)
-    const list = nearMeActive ? (nearBillboardsData ?? billboards) : billboards
-    setDetailBillboard(list.find((b) => b.id === id) ?? null)
+    setDetailId(id)
+    setDetailBookingId(bookingId)
   }
+
+  function closeDetail() {
+    setDetailId(null)
+    setDetailBookingId(null)
+  }
+
+  // Deep links: ?billboard=<id> (shared link / return from login),
+  // ?booking=<id> (notifications), ?activity=<tab>. Consumed once, then
+  // stripped from the URL.
+  const billboardParam = searchParams.get('billboard')
+  const bookingParam = searchParams.get('booking')
+  const activityParam = searchParams.get('activity')
+  useEffect(() => {
+    if (!billboardParam && !bookingParam && !activityParam) return
+    if (authLoading) return
+    if (bookingParam && role === 'renter' && myBookings === undefined) return // wait for bookings
+    const next = new URLSearchParams(searchParams)
+    if (billboardParam) {
+      handleSelect(billboardParam)
+      next.delete('billboard')
+    }
+    if (bookingParam) {
+      const booking = (myBookings ?? []).find((b) => b.id === bookingParam)
+      if (booking) handleSelect(booking.billboardId, booking.id)
+      else if (role === 'renter') openActivity('bookings')
+      next.delete('booking')
+    }
+    if (activityParam) {
+      if (role === 'renter') {
+        openActivity(
+          ACTIVITY_TABS.includes(activityParam as ActivityTabKey)
+            ? (activityParam as ActivityTabKey)
+            : 'bookings',
+        )
+      }
+      next.delete('activity')
+    }
+    setSearchParams(next, { replace: true })
+    // handleSelect/openActivity are stable in effect; re-run only on input changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billboardParam, bookingParam, activityParam, myBookings, role, authLoading])
 
   function toggleCategory(category: string) {
     setSelectedCategories((prev) => {
@@ -244,7 +322,6 @@ export function BillboardBrowsePage() {
       <TrafficLegend />
 
       <MapOverlayControls
-        billboards={billboards}
         isDark={isDark}
         onToggleTheme={() => setManualDark(!isDark)}
         categories={CATEGORIES}
@@ -271,7 +348,12 @@ export function BillboardBrowsePage() {
         onToggleGeofence={() => setShowGeofence((v) => !v)}
         renterControl={
           role === 'renter' ? (
-            <RenterBookingsControl onSelectBillboard={handleSelect} />
+            <RenterBookingsControl
+              onSelectBillboard={(id) => handleSelect(id)}
+              onSelectBooking={(billboardId, bookingId) =>
+                handleSelect(billboardId, bookingId)
+              }
+            />
           ) : undefined
         }
       />
@@ -285,11 +367,34 @@ export function BillboardBrowsePage() {
         locateStatus={locateStatus}
         distanceById={distanceById}
         emptyMessage={emptyMessage}
+        isLoading={billboardsLoading}
+        isError={billboardsError}
+        error={billboardsErrorValue}
+        onRetry={() => refetchBillboards()}
       />
+
+      {unlistedNotice && (
+        <div
+          role="status"
+          className="absolute bottom-14 left-1/2 z-[700] flex w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 items-start gap-3 border border-ink/10 bg-paper p-3 text-sm shadow-lg dark:border-paper/15 dark:bg-ink-soft"
+        >
+          <p className="flex-1">{unlistedNotice}</p>
+          <button
+            type="button"
+            onClick={closeDetail}
+            title="Dismiss"
+            aria-label="Dismiss"
+            className="shrink-0 text-ink/40 hover:text-ink dark:text-paper/40 dark:hover:text-paper"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
 
       <BillboardDetailDialog
         billboard={detailBillboard}
-        onClose={() => setDetailBillboard(null)}
+        initialBookingId={detailBookingId}
+        onClose={closeDetail}
         userCoords={userCoords}
       />
     </div>

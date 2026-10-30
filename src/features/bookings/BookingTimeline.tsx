@@ -4,6 +4,7 @@ import {
   CreditCard,
   Eye,
   FileText,
+  Hourglass,
   PartyPopper,
   Radio,
   Send,
@@ -25,6 +26,7 @@ const STAGE_ICON: Record<string, LucideIcon> = {
   completed: PartyPopper,
   declined: XCircle,
   cancelled: Ban,
+  expired: Hourglass,
 }
 
 const CIRCLE_CLASSES: Record<TimelineStageState, string> = {

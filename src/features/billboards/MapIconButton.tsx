@@ -15,6 +15,7 @@ export function MapIconButton({
     <button
       type="button"
       disabled={disabled}
+      aria-label={props['aria-label'] ?? props.title}
       className={cn(
         'flex size-9 items-center justify-center border shadow-md transition-colors',
         disabled

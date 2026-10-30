@@ -20,11 +20,13 @@ const BILLBOARD_GLYPH = `
 
 function priceTagIcon(
   formattedPrice: string,
-  trafficColor: string | null,
+  traffic: { color: string; label: string } | null,
   onSale: boolean,
 ) {
-  const dot = trafficColor
-    ? `<span style="display:inline-block;width:7px;height:7px;border-radius:9999px;background:${trafficColor};flex-shrink:0" aria-hidden="true"></span>`
+  // Colour dot plus a text equivalent (title + screen-reader text), so the
+  // traffic level isn't conveyed by colour alone.
+  const dot = traffic
+    ? `<span title="${traffic.label}" style="display:inline-block;width:7px;height:7px;border-radius:9999px;background:${traffic.color};flex-shrink:0" aria-hidden="true"></span><span class="sr-only">, ${traffic.label}</span>`
     : ''
   const background = onSale ? 'bg-accent' : 'bg-ink'
   return L.divIcon({
@@ -72,7 +74,12 @@ export function BillboardMarkers({
             position={[billboard.location.lat, billboard.location.lng]}
             icon={priceTagIcon(
               formatPrice(price),
-              billboard.trafficLevel ? TRAFFIC_COLORS[billboard.trafficLevel] : null,
+              billboard.trafficLevel
+                ? {
+                    color: TRAFFIC_COLORS[billboard.trafficLevel],
+                    label: TRAFFIC_LABELS[billboard.trafficLevel],
+                  }
+                : null,
               strikethroughFrom !== null,
             )}
             ref={(ref) => {
