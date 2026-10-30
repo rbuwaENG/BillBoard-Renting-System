@@ -12,6 +12,9 @@ describe('notificationHref', () => {
         'renter',
       ),
     ).toBe('/?booking=bk-2')
+    expect(
+      notificationHref({ type: 'proof_of_posting', refId: 'bk-3' }, 'renter'),
+    ).toBe('/?booking=bk-3')
   })
 
   it('links renter chat notifications to the messages tab', () => {

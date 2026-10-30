@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronUp, Clock, X } from 'lucide-react'
+import { Camera, Check, ChevronDown, ChevronUp, Clock, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Badge, Button, Card } from '@/components'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
@@ -9,9 +9,12 @@ import {
   BookingTimeline,
   computeBookingTimeline,
   CreativeLink,
+  PROOF_UPLOAD_STATUSES,
+  ProofOfPostingUploader,
   useBookingEvents,
   useRequestBookingDocuments,
 } from '@/features/bookings'
+import { formatDateRange } from '@/features/renter/formatDateRange'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { errorMessage } from './errors'
@@ -21,13 +24,6 @@ import {
   useRespondToBooking,
   type RentorBookingRequest,
 } from './useRentorBookings'
-
-function formatDateRange(start: string, end: string) {
-  const s = new Date(start)
-  const e = new Date(end)
-  const short: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
-  return `${s.toLocaleDateString('en-US', short)} – ${e.toLocaleDateString('en-US', { ...short, year: 'numeric' })}`
-}
 
 const DOCUMENT_REQUESTABLE_STATUSES = new Set([
   'pending_owner_review',
@@ -157,6 +153,30 @@ function BookingDetailsDisclosure({
             renterName={request.renterName}
             ownerName={ownerName}
           />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Contract 7: once a booking is paid, the owner shares photos of the
+// installed creative. The renter sees them in the timeline's "Posted" step.
+function ProofOfPostingAction({ bookingId }: { bookingId: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mt-3 border-t border-dashed border-ink/15 pt-3 dark:border-paper/15">
+      <Button
+        size="sm"
+        variant={open ? 'ghost' : 'secondary'}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Camera className="size-3.5" />
+        {open ? 'Close proof of posting' : 'Upload proof of posting'}
+      </Button>
+      {open && (
+        <div className="mt-3">
+          <ProofOfPostingUploader bookingId={bookingId} />
         </div>
       )}
     </div>
@@ -517,6 +537,10 @@ export function BookingInboxPanel() {
               <p role="alert" className="mt-2 text-xs text-brand-error">
                 Couldn't update this request: {respondError}
               </p>
+            )}
+
+            {PROOF_UPLOAD_STATUSES.has(status) && (
+              <ProofOfPostingAction bookingId={r.id} />
             )}
 
             <BookingDetailsDisclosure request={r} />

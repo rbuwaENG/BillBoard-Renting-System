@@ -7,6 +7,7 @@ export type { BookingActionKey, BookingNextStepCta, BookingNextStepOptions } fro
 export {
   CONTACT_UNLOCKED_STATUSES,
   IN_PROGRESS_STATUSES,
+  PROOF_UPLOAD_STATUSES,
   STATUS_LABEL,
   canUploadDocuments,
   isInProgress,
@@ -19,13 +20,18 @@ export {
   EXPIRED_REQUEST_COPY,
   computeBookingTimeline,
   getAwaitingDocumentsInfo,
+  getProofPostedAt,
 } from './bookingTimelineLogic'
 export type { TimelineActor, TimelineContext, TimelineStage, TimelineStageState } from './bookingTimelineLogic'
 export { CreativeLink } from './CreativeLink'
+export { ProofOfPostingGallery } from './ProofOfPostingGallery'
+export { ProofOfPostingUploader } from './ProofOfPostingUploader'
 export { useBookingEvents } from './useBookingEvents'
 export type { BookingEvent, BookingEventType } from './useBookingEvents'
 export {
+  MAX_PROOF_PHOTOS,
   useAddBookingDocument,
+  useAddProofOfPosting,
   useBookingDocuments,
   useRemoveBookingDocument,
 } from './useBookingDocuments'

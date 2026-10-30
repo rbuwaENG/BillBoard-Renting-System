@@ -1,6 +1,7 @@
 import {
   Bell,
   Calendar,
+  Camera,
   CheckCircle2,
   Clock,
   CreditCard,
@@ -40,6 +41,7 @@ const TYPE_ICON: Record<string, LucideIcon> = {
   documents_requested: FileText,
   payment_reminder: Clock,
   rental_starting_soon: Calendar,
+  proof_of_posting: Camera,
 }
 
 function timeAgo(iso: string) {

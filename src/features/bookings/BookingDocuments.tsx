@@ -31,7 +31,8 @@ interface BookingDocumentsProps {
 export function BookingDocuments({ bookingId, canUpload, canRemove }: BookingDocumentsProps) {
   const { user } = useAuth()
   const { data, isLoading } = useBookingDocuments(bookingId)
-  const documents = data ?? []
+  // Proof-of-posting photos are shown in the timeline's "Posted" step.
+  const documents = (data ?? []).filter((d) => d.kind !== 'proof_of_posting')
   const addDocument = useAddBookingDocument()
   const removeDocument = useRemoveBookingDocument()
   const [uploading, setUploading] = useState(false)

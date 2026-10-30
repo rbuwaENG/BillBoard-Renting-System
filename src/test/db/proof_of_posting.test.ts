@@ -59,7 +59,8 @@ function addProof(
     p_mime: string
   }> = {},
 ) {
-  const name = overrides.p_name ?? `photo-${Math.random().toString(36).slice(2, 7)}.jpg`
+  const name =
+    overrides.p_name ?? `photo-${Math.random().toString(36).slice(2, 7)}.jpg`
   return asUser(db, userId, (tx) =>
     rpc<DocRow>(tx, 'add_proof_of_posting', {
       p_booking_id: bookingId,
@@ -108,7 +109,9 @@ describe('add_proof_of_posting (0033)', () => {
 
   it('lets the owner add proof to a confirmed booking: document, event, one notification', async () => {
     const booking = await bookingIn(db, s, 'confirmed')
-    const doc = await addProof(db, s.owner.id, booking.id, { p_name: 'front.jpg' })
+    const doc = await addProof(db, s.owner.id, booking.id, {
+      p_name: 'front.jpg',
+    })
     expect(doc).toMatchObject({
       booking_id: booking.id,
       uploaded_by: s.owner.id,
@@ -121,7 +124,9 @@ describe('add_proof_of_posting (0033)', () => {
         where booking_id = $1 and event_type = 'proof_posted'`,
       [booking.id],
     )
-    expect(events.rows).toEqual([{ actor_id: s.owner.id, message: 'front.jpg' }])
+    expect(events.rows).toEqual([
+      { actor_id: s.owner.id, message: 'front.jpg' },
+    ])
 
     // A second photo in the same batch doesn't notify again while unread...
     await addProof(db, s.owner.id, booking.id)
@@ -144,10 +149,13 @@ describe('add_proof_of_posting (0033)', () => {
 
   it('works while the booking is active', async () => {
     const booking = await bookingIn(db, s, 'confirmed')
-    await db.query(`update public.bookings set status = 'active' where id = $1`, [
-      booking.id,
-    ])
-    expect((await addProof(db, s.owner.id, booking.id)).kind).toBe('proof_of_posting')
+    await db.query(
+      `update public.bookings set status = 'active' where id = $1`,
+      [booking.id],
+    )
+    expect((await addProof(db, s.owner.id, booking.id)).kind).toBe(
+      'proof_of_posting',
+    )
   })
 
   it('rejects bookings that are not confirmed or active', async () => {
@@ -158,9 +166,10 @@ describe('add_proof_of_posting (0033)', () => {
       )
     }
     const done = await bookingIn(db, s, 'confirmed')
-    await db.query(`update public.bookings set status = 'completed' where id = $1`, [
-      done.id,
-    ])
+    await db.query(
+      `update public.bookings set status = 'completed' where id = $1`,
+      [done.id],
+    )
     await expect(addProof(db, s.owner.id, done.id)).rejects.toThrow(
       'confirmed or active',
     )
@@ -243,9 +252,10 @@ describe('add_proof_of_posting (0033)', () => {
     const booking = await createBooking(db, s.renter.id, billboard.id)
     await respondToBooking(db, owner.id, booking.id, true)
     await confirmPayment(db, s.admin.id, booking.id)
-    await db.query(`update public.profiles set status = 'suspended' where id = $1`, [
-      owner.id,
-    ])
+    await db.query(
+      `update public.profiles set status = 'suspended' where id = $1`,
+      [owner.id],
+    )
     await expect(addProof(db, owner.id, booking.id)).rejects.toThrow(
       'Account suspended',
     )

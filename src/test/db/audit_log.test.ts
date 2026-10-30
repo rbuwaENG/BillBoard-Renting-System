@@ -65,9 +65,10 @@ describe('admin_audit_log triggers (0034)', () => {
   it('logs admin role and status changes on profiles (changed columns only)', async () => {
     const user = await createUser(db, { role: 'renter' })
     await asUser(db, s.admin.id, (tx) =>
-      tx.query(`update public.profiles set status = 'suspended' where id = $1`, [
-        user.id,
-      ]),
+      tx.query(
+        `update public.profiles set status = 'suspended' where id = $1`,
+        [user.id],
+      ),
     )
     await asUser(db, s.admin.id, (tx) =>
       tx.query(
@@ -171,9 +172,10 @@ describe('admin_audit_log triggers (0034)', () => {
     expect(await auditFor(db, id)).toEqual([])
     // ...but the same change made by an admin is logged.
     await asUser(db, s.admin.id, (tx) =>
-      tx.query(`update public.billboards set status = 'inactive' where id = $1`, [
-        id,
-      ]),
+      tx.query(
+        `update public.billboards set status = 'inactive' where id = $1`,
+        [id],
+      ),
     )
     expect(await auditFor(db, id)).toEqual([
       expect.objectContaining({
@@ -234,9 +236,10 @@ describe('admin_audit_log triggers (0034)', () => {
       rpc(tx, 'admin_release_payout', { p_payout_id: payout.id }),
     )
     // A cron/system write (superuser, no auth.uid()).
-    await db.query(`update public.payouts set status = 'cancelled' where id = $1`, [
-      payout.id,
-    ])
+    await db.query(
+      `update public.payouts set status = 'cancelled' where id = $1`,
+      [payout.id],
+    )
     expect(await auditFor(db, payout.id)).toEqual([
       expect.objectContaining({
         actor_id: s.admin.id,
@@ -262,9 +265,10 @@ describe('admin_audit_log access (0034)', () => {
     s = await seedMarketplace(db)
     const user = await createUser(db, { role: 'renter' })
     await asUser(db, s.admin.id, (tx) =>
-      tx.query(`update public.profiles set status = 'suspended' where id = $1`, [
-        user.id,
-      ]),
+      tx.query(
+        `update public.profiles set status = 'suspended' where id = $1`,
+        [user.id],
+      ),
     )
   })
   afterAll(async () => {
@@ -317,7 +321,9 @@ describe('suspended admins (0034 is_admin fix)', () => {
   beforeAll(async () => {
     db = await createDb()
     s = await seedMarketplace(db)
-    suspendedAdmin = (await createUser(db, { role: 'admin', status: 'suspended' })).id
+    suspendedAdmin = (
+      await createUser(db, { role: 'admin', status: 'suspended' })
+    ).id
   })
   afterAll(async () => {
     await db?.close()
@@ -372,9 +378,10 @@ describe('suspended admins (0034 is_admin fix)', () => {
 
   it('cannot change other users or read the audit log', async () => {
     const res = await asUser(db, suspendedAdmin, (tx) =>
-      tx.query(`update public.profiles set status = 'suspended' where id = $1`, [
-        s.renter.id,
-      ]),
+      tx.query(
+        `update public.profiles set status = 'suspended' where id = $1`,
+        [s.renter.id],
+      ),
     )
     expect(res.affectedRows).toBe(0)
     const log = await asUser(db, suspendedAdmin, (tx) =>

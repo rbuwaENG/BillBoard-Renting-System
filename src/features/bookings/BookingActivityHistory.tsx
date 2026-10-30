@@ -11,6 +11,9 @@ function describeEvent(event: BookingEvent): string {
   if (event.eventType === 'document_uploaded') {
     return event.message ? `Uploaded "${event.message}"` : 'Uploaded a document'
   }
+  if (event.eventType === 'proof_posted') {
+    return event.message ? `Shared proof of posting "${event.message}"` : 'Shared proof of posting'
+  }
   if (!event.fromStatus) return 'Submitted the booking request'
   if (event.toStatus) {
     const label = STATUS_LABEL[event.toStatus as keyof typeof STATUS_LABEL] ?? event.toStatus
