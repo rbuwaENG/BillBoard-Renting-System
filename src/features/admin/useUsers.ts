@@ -26,16 +26,28 @@ function toUserProfile(row: ProfileRow): UserProfile {
   }
 }
 
+// admin_list_users caps a page at 1000 rows.
+const ADMIN_USERS_PAGE = 1000
+
+// email/phone aren't readable through the profiles table (0030 column
+// grants), so admins list users via the admin_list_users RPC. Fetches every
+// page so the panel's client-side search/paging sees all users, newest first.
 export function useAllUsers() {
   return useQuery({
     queryKey: ['admin-users'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return (data as ProfileRow[]).map(toUserProfile)
+      const rows: ProfileRow[] = []
+      for (;;) {
+        const { data, error } = await supabase.rpc('admin_list_users', {
+          p_limit: ADMIN_USERS_PAGE,
+          p_offset: rows.length,
+        })
+        if (error) throw error
+        const page = (data ?? []) as ProfileRow[]
+        rows.push(...page)
+        if (page.length < ADMIN_USERS_PAGE) break
+      }
+      return rows.map(toUserProfile)
     },
   })
 }

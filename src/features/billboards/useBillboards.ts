@@ -6,8 +6,6 @@ export interface BillboardWithDetails {
   id: string
   ownerId: string
   ownerName: string
-  ownerPhone: string
-  ownerEmail: string
   title: string
   description: string
   category: string
@@ -47,7 +45,9 @@ export interface BillboardRow {
   updated_at: string
   categories: { name: string } | null
   sizes: { label: string } | null
-  profiles: { display_name: string; email: string; phone: string | null } | null
+  // Public profile columns only: email/phone are not readable (0030); the
+  // counterparty contact comes from the get_booking_contact RPC.
+  profiles: { display_name: string } | null
 }
 
 export function toBillboard(row: BillboardRow): BillboardWithDetails {
@@ -55,8 +55,6 @@ export function toBillboard(row: BillboardRow): BillboardWithDetails {
     id: row.id,
     ownerId: row.owner_id,
     ownerName: row.profiles?.display_name ?? 'Unknown owner',
-    ownerPhone: row.profiles?.phone ?? '',
-    ownerEmail: row.profiles?.email ?? '',
     title: row.title,
     description: row.description,
     category: row.categories?.name ?? 'Uncategorized',
@@ -76,7 +74,7 @@ export function toBillboard(row: BillboardRow): BillboardWithDetails {
 }
 
 export const BILLBOARD_SELECT =
-  '*, categories(name), sizes(label), profiles(display_name, email, phone)'
+  '*, categories(name), sizes(label), profiles(display_name)'
 const SELECT = BILLBOARD_SELECT
 
 export function useBillboards() {
