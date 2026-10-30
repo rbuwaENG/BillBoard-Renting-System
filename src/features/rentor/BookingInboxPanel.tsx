@@ -1,5 +1,5 @@
 import { Camera, Check, ChevronDown, ChevronUp, Clock, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Badge, Button, Card } from '@/components'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import {
@@ -32,11 +32,20 @@ const DOCUMENT_REQUESTABLE_STATUSES = new Set([
 
 function BookingDetailsDisclosure({
   request,
+  forceOpen = false,
 }: {
   request: RentorBookingRequest
+  // Opens the disclosure (e.g. when a notification link focuses this
+  // booking); the owner can still collapse it afterwards.
+  forceOpen?: boolean
 }) {
   const { user } = useAuth()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(forceOpen)
+  const [prevForceOpen, setPrevForceOpen] = useState(forceOpen)
+  if (forceOpen !== prevForceOpen) {
+    setPrevForceOpen(forceOpen)
+    if (forceOpen) setOpen(true)
+  }
   const [showRequestForm, setShowRequestForm] = useState(false)
   const [note, setNote] = useState('')
   const { data: eventsData } = useBookingEvents(open ? request.id : null)
@@ -255,7 +264,17 @@ function sortInboxRequests(requests: RentorBookingRequest[]) {
   })
 }
 
-export function BookingInboxPanel() {
+function inboxCardId(bookingId: string) {
+  return `inbox-booking-${bookingId}`
+}
+
+export function BookingInboxPanel({
+  focusBookingId = null,
+}: {
+  // From a notification link (`/rentor?booking=<id>`): scrolled to,
+  // highlighted and expanded.
+  focusBookingId?: string | null
+} = {}) {
   const formatPrice = useFormatPrice()
   const { data, isLoading, isError, error, refetch } = useOwnerBookings()
   const requests = useMemo(() => data ?? [], [data])
@@ -266,6 +285,26 @@ export function BookingInboxPanel() {
   const [billboardFilter, setBillboardFilter] = useState('all')
   // Captured once per mount; good enough for an "hours left" hint.
   const [now] = useState(() => Date.now())
+
+  // A newly focused booking must be visible: drop any filters hiding it.
+  const [prevFocusId, setPrevFocusId] = useState<string | null>(null)
+  if (focusBookingId !== prevFocusId) {
+    setPrevFocusId(focusBookingId)
+    if (focusBookingId) {
+      setStatusFilter('all')
+      setBillboardFilter('all')
+    }
+  }
+  const focusFound =
+    !!focusBookingId && requests.some((r) => r.id === focusBookingId)
+
+  useEffect(() => {
+    if (!focusFound || !focusBookingId) return
+    document
+      .getElementById(inboxCardId(focusBookingId))
+      // Not implemented by jsdom (tests) — hence the optional call.
+      ?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+  }, [focusFound, focusBookingId])
 
   const billboardOptions = useMemo(() => {
     const byId = new Map<string, string>()
@@ -401,10 +440,17 @@ export function BookingInboxPanel() {
         const respondError =
           failedId === r.id ? errorMessage(respondToBooking.error) : null
         const hint = isPendingReview ? respondByHint(r.createdAt, now) : null
+        const focused = r.id === focusBookingId
         return (
           <Card
             key={r.id}
-            className={cn('p-4', isPendingReview && 'border-accent/40')}
+            id={inboxCardId(r.id)}
+            aria-current={focused ? 'true' : undefined}
+            className={cn(
+              'scroll-mt-24 p-4',
+              isPendingReview && 'border-accent/40',
+              focused && 'ring-2 ring-accent',
+            )}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -543,7 +589,7 @@ export function BookingInboxPanel() {
               <ProofOfPostingAction bookingId={r.id} />
             )}
 
-            <BookingDetailsDisclosure request={r} />
+            <BookingDetailsDisclosure request={r} forceOpen={focused} />
           </Card>
         )
       })}

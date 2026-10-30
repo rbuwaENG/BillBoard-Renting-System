@@ -1,5 +1,10 @@
 import { supabase } from '@/lib/supabase'
-import { getFileKind, getFilename, type FileKind } from '@/lib/fileKind'
+import {
+  getFileKind,
+  getFilename,
+  uploadPath,
+  type FileKind,
+} from '@/lib/fileKind'
 
 export type CreativeKind = FileKind
 export const getCreativeKind = getFileKind
@@ -9,7 +14,7 @@ export async function uploadBookingCreative(
   file: File,
   bookingId: string,
 ): Promise<string> {
-  const path = `${bookingId}/${crypto.randomUUID()}-${file.name}`
+  const path = uploadPath(bookingId, file)
   const { error } = await supabase.storage
     .from('booking-creatives')
     .upload(path, file)
@@ -23,7 +28,7 @@ export async function uploadProofOfPosting(
   file: File,
   bookingId: string,
 ): Promise<string> {
-  const path = `${bookingId}/proof/${crypto.randomUUID()}-${file.name}`
+  const path = uploadPath(`${bookingId}/proof`, file)
   const { error } = await supabase.storage
     .from('booking-creatives')
     .upload(path, file, { contentType: file.type || undefined })

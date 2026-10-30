@@ -2,6 +2,12 @@ import { ArrowLeft, Paperclip, Send, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Button } from '@/components'
 import { useAuth } from '@/hooks/useAuth'
+import {
+  fileTypeError,
+  MEDIA_ACCEPT,
+  MEDIA_MIME_TYPES,
+  MEDIA_TYPES_LABEL,
+} from '@/lib/fileKind'
 import { cn } from '@/lib/utils'
 import { ChatAttachmentBubble } from './ChatAttachmentBubble'
 import { uploadChatAttachment } from './chatAttachmentStorage'
@@ -183,12 +189,22 @@ export function ChatPanel({ threadId, title, onBack }: ChatPanelProps) {
           <input
             key={fileInputKey}
             type="file"
-            accept="image/*,video/*,application/pdf"
+            accept={MEDIA_ACCEPT}
             aria-label="Attach an image, video, or file"
             className="sr-only"
             disabled={sending}
             onChange={(e) => {
-              setAttachmentFile(e.target.files?.[0] ?? null)
+              const file = e.target.files?.[0] ?? null
+              const typeProblem = file
+                ? fileTypeError(file, MEDIA_MIME_TYPES, MEDIA_TYPES_LABEL)
+                : null
+              if (typeProblem) {
+                setAttachmentFile(null)
+                setSendError(typeProblem)
+                setFileInputKey((k) => k + 1)
+                return
+              }
+              setAttachmentFile(file)
               setSendError(null)
             }}
           />

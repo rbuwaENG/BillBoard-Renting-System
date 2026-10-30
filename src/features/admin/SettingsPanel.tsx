@@ -19,6 +19,12 @@ import {
   useUpdatePaymentGatewaySettings,
 } from './usePaymentGatewaySettings'
 import { uploadSiteLogo } from './uploadSiteLogo'
+import {
+  fileTypeError,
+  IMAGE_ACCEPT,
+  IMAGE_MIME_TYPES,
+  IMAGE_TYPES_LABEL,
+} from '@/lib/fileKind'
 
 function BrandingCard() {
   const { data } = useCurrencySetting()
@@ -32,6 +38,12 @@ function BrandingCard() {
   async function handleLogoChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    const typeProblem = fileTypeError(file, IMAGE_MIME_TYPES, IMAGE_TYPES_LABEL)
+    if (typeProblem) {
+      setUploadError(new Error(typeProblem))
+      e.target.value = ''
+      return
+    }
     setUploading(true)
     setUploadError(null)
     try {
@@ -89,7 +101,7 @@ function BrandingCard() {
         )}
         <input
           type="file"
-          accept="image/*"
+          accept={IMAGE_ACCEPT}
           disabled={uploading}
           onChange={handleLogoChange}
           className="block w-full text-sm"

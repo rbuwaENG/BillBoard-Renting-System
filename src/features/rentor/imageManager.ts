@@ -1,5 +1,10 @@
 import { useEffect, useRef } from 'react'
-import { getFileKind } from '@/lib/fileKind'
+import {
+  fileTypeError,
+  getFileKind,
+  IMAGE_MIME_TYPES,
+  IMAGE_TYPES_LABEL,
+} from '@/lib/fileKind'
 
 // Matches the billboard-images bucket limit.
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -78,6 +83,9 @@ export function imageFileError(file: File): string | null {
   const looksLikeImage =
     file.type.startsWith('image/') || getFileKind(file.name) === 'image'
   if (!looksLikeImage) return `"${file.name}" isn't an image.`
+  // The bucket only takes an explicit list (no SVG — scriptable).
+  const typeProblem = fileTypeError(file, IMAGE_MIME_TYPES, IMAGE_TYPES_LABEL)
+  if (typeProblem) return typeProblem
   if (file.size > MAX_IMAGE_BYTES) {
     return `"${file.name}" is too large (max 5MB).`
   }

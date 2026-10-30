@@ -38,6 +38,8 @@ export interface Billboard {
   adminPriceOverridePerDay?: number | null
   images: string[]
   status: BillboardStatus
+  // Admin moderation lock (0035): only an admin can change the status.
+  statusLockedByAdmin?: boolean
   district?: string
   trafficLevel?: TrafficLevel
   rating: { avg: number; count: number }

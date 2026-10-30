@@ -54,6 +54,13 @@ import { ReviewDialog } from '@/features/renter/ReviewDialog'
 import { useMyBookings, type MyBooking } from '@/features/renter/useMyBookings'
 import { useAuth } from '@/hooks/useAuth'
 import { distanceKm } from '@/lib/geohash'
+import {
+  fileTypeError,
+  MEDIA_ACCEPT,
+  MEDIA_MIME_TYPES,
+  MEDIA_TYPES_LABEL,
+} from '@/lib/fileKind'
+import { getErrorMessage } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import type { TrafficLevel } from '@/types'
 import { BillboardGallery } from './BillboardGallery'
@@ -237,7 +244,8 @@ function RequestBookingForm({
     } catch (err) {
       // Someone else booked these dates in the meantime — refresh the
       // calendar so the clash shows. The message itself renders below.
-      if (err instanceof Error && /overlap/i.test(err.message)) {
+      // (Supabase errors are plain objects, not Error instances.)
+      if (/overlap/i.test(getErrorMessage(err, ''))) {
         void booked.refetch()
       }
       return
@@ -253,8 +261,9 @@ function RequestBookingForm({
           kind: 'creative',
         })
       } catch (err) {
+        const reason = getErrorMessage(err, '')
         creativeWarning = `Your request was sent, but "${creativeFile.name}" couldn't be uploaded${
-          err instanceof Error && err.message ? ` (${err.message})` : ''
+          reason ? ` (${reason})` : ''
         }. Open the booking's Documents tab to try again.`
       } finally {
         setUploadingCreative(false)
@@ -302,9 +311,12 @@ function RequestBookingForm({
           Creative file (optional)
         </span>
         <FileDropzone
-          accept="image/*,video/*,application/pdf"
+          accept={MEDIA_ACCEPT}
           maxSizeBytes={MAX_CREATIVE_BYTES}
           hint="Image, video, or PDF — up to 10MB"
+          validate={(file) =>
+            fileTypeError(file, MEDIA_MIME_TYPES, MEDIA_TYPES_LABEL)
+          }
           onFilesSelected={(files) => {
             setFileError(null)
             setCreativeFile(files[0] ?? null)
@@ -349,7 +361,7 @@ function RequestBookingForm({
 
       {requestBooking.isError && !overlapsBooking && (
         <p role="alert" className="text-xs text-brand-error">
-          {(requestBooking.error as Error).message}
+          {getErrorMessage(requestBooking.error)}
         </p>
       )}
 
@@ -810,6 +822,47 @@ export function BillboardDetailContent({
           )}
         </div>
 
+        {requestOutcome?.creativeWarning && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 border border-brand-error/40 p-3 text-xs text-brand-error"
+          >
+            <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+            <p className="flex-1">
+              {requestOutcome.creativeWarning}
+              {activeBooking && canUploadDocuments(activeBooking.status) && (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('documents')
+                      setRequestOutcome((o) =>
+                        o ? { ...o, creativeWarning: null } : o,
+                      )
+                    }}
+                    className="font-medium underline"
+                  >
+                    Open Documents
+                  </button>
+                </>
+              )}
+            </p>
+            <button
+              type="button"
+              aria-label="Dismiss warning"
+              onClick={() =>
+                setRequestOutcome((o) =>
+                  o ? { ...o, creativeWarning: null } : o,
+                )
+              }
+              className="shrink-0"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        )}
+
         {!isOwner && activeBooking ? (
           <>
             {viewingPast && (
@@ -959,15 +1012,6 @@ export function BillboardDetailContent({
                     notify you when they respond — track its status from "My
                     activity".
                   </p>
-                  {requestOutcome.creativeWarning && (
-                    <p
-                      role="alert"
-                      className="flex items-start gap-2 text-xs text-brand-error"
-                    >
-                      <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
-                      {requestOutcome.creativeWarning}
-                    </p>
-                  )}
                 </div>
               ) : showBookingForm ? (
                 <RequestBookingForm
@@ -1033,7 +1077,7 @@ export function BillboardDetailContent({
             pending={cancelBooking.isPending}
             error={
               cancelBooking.isError
-                ? (cancelBooking.error as Error).message
+                ? getErrorMessage(cancelBooking.error)
                 : null
             }
             onConfirm={() =>

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { createSupabaseMock } from '@/test/supabaseMock'
 import type { RentorBookingRequest } from './useRentorBookings'
@@ -260,5 +260,42 @@ describe('BookingInboxPanel', () => {
     expect(
       screen.getByRole('button', { name: /close proof of posting/i }),
     ).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('focuses the booking from a notification link: clears filters, highlights and expands it', () => {
+    const other: RentorBookingRequest = {
+      ...REQUEST,
+      id: 'booking-2',
+      status: 'rejected',
+      billboardTitle: 'Harbour Board',
+    }
+    setup(vi.fn(), { requests: [REQUEST, other] })
+    const queryClient = new QueryClient()
+    const view = (focus: string | null) => (
+      <QueryClientProvider client={queryClient}>
+        <BookingInboxPanel focusBookingId={focus} />
+      </QueryClientProvider>
+    )
+    const { rerender } = render(view(null))
+
+    // Hide booking-2 behind a filter, then follow a link to it.
+    fireEvent.change(screen.getByDisplayValue('All statuses'), {
+      target: { value: 'pending_owner_review' },
+    })
+    expect(screen.queryByText('Harbour Board')).toBeNull()
+
+    rerender(view('booking-2'))
+    const card = screen.getByText('Harbour Board').closest('[aria-current]')
+    expect(card).toHaveAttribute('aria-current', 'true')
+    expect(card).toHaveAttribute('id', 'inbox-booking-booking-2')
+    expect(
+      within(card as HTMLElement).getByRole('button', {
+        name: /hide timeline & documents/i,
+      }),
+    ).toBeInTheDocument()
+    // The other booking stays collapsed and unhighlighted.
+    expect(
+      screen.getAllByRole('button', { name: /view timeline & documents/i }),
+    ).toHaveLength(1)
   })
 })

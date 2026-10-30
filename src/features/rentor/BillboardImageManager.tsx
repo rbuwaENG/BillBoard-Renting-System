@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Star, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { FileDropzone } from '@/components'
 import { BillboardPhoto } from '@/features/billboards/BillboardPhoto'
+import { IMAGE_ACCEPT } from '@/lib/fileKind'
 import { cn } from '@/lib/utils'
 import {
   imageFileError,
@@ -131,12 +132,12 @@ export function BillboardImageManager({
       )}
 
       <FileDropzone
-        accept="image/*"
+        accept={IMAGE_ACCEPT}
         multiple
         disabled={disabled}
         // Size/type are checked per file in addFiles, so one oversized pick
         // doesn't throw away the rest of the selection.
-        hint="JPG, PNG, WebP… up to 5MB each · the first photo is the cover"
+        hint="JPG, PNG, WebP, GIF or AVIF up to 5MB each · the first photo is the cover"
         onFilesSelected={addFiles}
       />
       {error && (

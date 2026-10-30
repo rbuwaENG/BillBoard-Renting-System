@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
-import { queryKeys } from '@/lib/queryKeys'
+import { uploadPath } from '@/lib/fileKind'
+import { invalidateBillboard, queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { BillboardStatus, TrafficLevel } from '@/types'
 
@@ -24,6 +25,9 @@ export interface RentorBillboard {
   adminPriceOverridePerDay: number | null
   images: string[]
   status: OwnerBillboardStatus
+  // Set when an admin moderated the listing (0035): only an admin can then
+  // change its status, and the owner can't delete it.
+  statusLockedByAdmin: boolean
   district: string | null
   trafficLevel: TrafficLevel | null
   rating: { avg: number; count: number }
@@ -63,6 +67,7 @@ interface RentorBillboardRow {
   admin_price_override_per_day: number | null
   images: string[]
   status: OwnerBillboardStatus
+  status_locked_by_admin?: boolean | null
   district: string | null
   traffic_level: TrafficLevel | null
   rating_avg: number
@@ -94,6 +99,7 @@ function toRentorBillboard(row: RentorBillboardRow): RentorBillboard {
     adminPriceOverridePerDay: row.admin_price_override_per_day,
     images: row.images,
     status: row.status,
+    statusLockedByAdmin: !!row.status_locked_by_admin,
     district: row.district,
     trafficLevel: row.traffic_level,
     rating: { avg: row.rating_avg, count: row.rating_count },
@@ -127,7 +133,7 @@ export async function uploadBillboardImages(
 ): Promise<string[]> {
   const urls: string[] = []
   for (const file of Array.from(files)) {
-    const path = `${ownerId}/${crypto.randomUUID()}-${file.name}`
+    const path = uploadPath(ownerId, file)
     const { error } = await supabase.storage
       .from('billboard-images')
       .upload(path, file)
@@ -140,10 +146,11 @@ export async function uploadBillboardImages(
   return urls
 }
 
-function invalidateBillboardQueries(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: queryKeys.rentorBillboards.all })
-  qc.invalidateQueries({ queryKey: queryKeys.billboards })
-  qc.invalidateQueries({ queryKey: queryKeys.billboardsNear.all })
+function invalidateBillboardQueries(
+  qc: ReturnType<typeof useQueryClient>,
+  billboardId?: string,
+) {
+  void invalidateBillboard(qc, billboardId)
 }
 
 export function useCreateBillboard() {
@@ -203,7 +210,7 @@ export function useUpdateBillboard() {
         .eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => invalidateBillboardQueries(qc),
+    onSuccess: (_data, vars) => invalidateBillboardQueries(qc, vars.id),
   })
 }
 
@@ -223,7 +230,7 @@ export function useSetBillboardStatus() {
         .eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => invalidateBillboardQueries(qc),
+    onSuccess: (_data, vars) => invalidateBillboardQueries(qc, vars.id),
   })
 }
 
@@ -234,6 +241,6 @@ export function useDeleteBillboard() {
       const { error } = await supabase.from('billboards').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => invalidateBillboardQueries(qc),
+    onSuccess: (_data, id) => invalidateBillboardQueries(qc, id),
   })
 }

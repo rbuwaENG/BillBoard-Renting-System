@@ -2,7 +2,15 @@ import { FileText, Image as ImageIcon, Paperclip, Trash2, Video } from 'lucide-r
 import { useState } from 'react'
 import { FileDropzone } from '@/components'
 import { useAuth } from '@/hooks/useAuth'
-import { getFileKind, getFilename } from '@/lib/fileKind'
+import {
+  fileTypeError,
+  getFileKind,
+  getFilename,
+  MEDIA_ACCEPT,
+  MEDIA_MIME_TYPES,
+  MEDIA_TYPES_LABEL,
+} from '@/lib/fileKind'
+import { getErrorMessage } from '@/lib/toast'
 import { getBookingCreativeUrl } from './creativeStorage'
 import {
   useAddBookingDocument,
@@ -11,7 +19,7 @@ import {
   type BookingDocument,
 } from './useBookingDocuments'
 
-const ACCEPT = 'image/*,video/*,application/pdf'
+const ACCEPT = MEDIA_ACCEPT
 const MAX_SIZE_BYTES = 10 * 1024 * 1024
 
 const KIND_ICON = { image: ImageIcon, video: Video, pdf: FileText, other: Paperclip } as const
@@ -53,8 +61,11 @@ export function BookingDocuments({ bookingId, canUpload, canRemove }: BookingDoc
     for (const file of files) {
       try {
         await addDocument.mutateAsync({ bookingId, file })
-      } catch {
-        setError(`"${file.name}" failed to upload. Please try again.`)
+      } catch (err) {
+        const reason = getErrorMessage(err, '')
+        setError(
+          `"${file.name}" failed to upload${reason ? ` (${reason})` : ''}. Please try again.`,
+        )
       }
     }
     setUploading(false)
@@ -116,6 +127,9 @@ export function BookingDocuments({ bookingId, canUpload, canRemove }: BookingDoc
             multiple
             maxSizeBytes={MAX_SIZE_BYTES}
             hint="Images, video, or PDF — up to 10MB each"
+            validate={(file) =>
+              fileTypeError(file, MEDIA_MIME_TYPES, MEDIA_TYPES_LABEL)
+            }
             disabled={uploading}
             onFilesSelected={handleFiles}
             onError={setError}

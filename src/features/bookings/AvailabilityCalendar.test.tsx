@@ -156,4 +156,46 @@ describe('AvailabilityCalendar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
     expect(screen.getByTestId('value')).toHaveTextContent('|')
   })
+
+  it('stops at 365 days ahead for a start date (server limit)', () => {
+    render(<Harness />)
+    const next = screen.getByRole('button', { name: 'Next month' })
+    for (let i = 0; i < 12; i++) fireEvent.click(next)
+    expect(
+      screen.getByRole('grid', { name: 'Booking dates, October 2027' }),
+    ).toBeInTheDocument()
+    expect(next).toBeDisabled()
+
+    // 2027-10-30 is today + 365: allowed. The 31st is one day too far.
+    expect(day(/^Saturday, October 30, 2027/)).not.toHaveAttribute(
+      'aria-disabled',
+    )
+    const tooFar = day(/^Sunday, October 31, 2027/)
+    expect(tooFar).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(tooFar)
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Bookings can start at most 365 days ahead',
+    )
+    expect(screen.getByTestId('value')).toHaveTextContent('|')
+  })
+
+  it('lets an end date run up to 365 days past a late start, but no further', () => {
+    render(<Harness initial={{ startDate: '2027-10-01', endDate: '' }} />)
+    const next = screen.getByRole('button', { name: 'Next month' })
+    // 2027-10-01 + 364 days = 2028-09-29.
+    for (let i = 0; i < 11; i++) fireEvent.click(next)
+    expect(
+      screen.getByRole('grid', { name: 'Booking dates, September 2028' }),
+    ).toBeInTheDocument()
+    expect(next).toBeDisabled()
+
+    fireEvent.click(day(/^Saturday, September 30, 2028/))
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Bookings can be at most 365 days long',
+    )
+    fireEvent.click(day(/^Friday, September 29, 2028/))
+    expect(screen.getByTestId('value')).toHaveTextContent(
+      '2027-10-01|2028-09-29',
+    )
+  })
 })

@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { fetchAllRows } from '@/lib/fetchAllRows'
+import { invalidateBooking, queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { Payment } from '@/types'
 import { usePagedQuery } from './usePagedQuery'
@@ -73,15 +75,19 @@ function toAdminPayment(row: PaymentRow): AdminPayment {
 }
 
 // Renter-submitted payments awaiting an admin decision, oldest first.
+// Every paged query ends its ORDER BY on `id`: rows created in one statement
+// (e.g. `create_campaign`) share `created_at`, and without a unique
+// tie-breaker `.range()` pages could repeat or skip them.
 export function usePendingSubmissions() {
   return usePagedQuery(
-    ['admin-pending-payments', 'submissions'],
+    queryKeys.adminPendingPayments.submissions,
     async (from, to) => {
       const { data, error } = await supabase
         .from('payments')
         .select(PAYMENT_SELECT)
         .eq('status', 'pending')
         .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
         .range(from, to)
       if (error) throw error
       return (data as unknown as PaymentRow[]).map(toAdminPayment)
@@ -89,31 +95,44 @@ export function usePendingSubmissions() {
   )
 }
 
-// Every payment, newest first — the payments history table / CSV export.
+function paymentHistoryPage(from: number, to: number) {
+  return supabase
+    .from('payments')
+    .select(PAYMENT_SELECT)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(from, to)
+}
+
+// Every payment, newest first — the payments history table.
 export function useAdminPaymentHistory() {
-  return usePagedQuery(['admin-payments'], async (from, to) => {
-    const { data, error } = await supabase
-      .from('payments')
-      .select(PAYMENT_SELECT)
-      .order('created_at', { ascending: false })
-      .range(from, to)
+  return usePagedQuery(queryKeys.adminPayments.all, async (from, to) => {
+    const { data, error } = await paymentHistoryPage(from, to)
     if (error) throw error
     return (data as unknown as PaymentRow[]).map(toAdminPayment)
   })
 }
 
+// The whole payment history (not just the loaded pages) for the CSV export.
+export async function fetchAllPaymentHistory(): Promise<AdminPayment[]> {
+  const rows = await fetchAllRows<PaymentRow>(paymentHistoryPage)
+  return rows.map(toAdminPayment)
+}
+
 // Platform revenue = money actually received: the sum of succeeded payments.
-// (Aggregated client-side; a server-side aggregate is out of scope.)
+// (Aggregated client-side, paging past PostgREST's 1000-row cap.)
 export function useSucceededPaymentsTotal() {
   return useQuery({
-    queryKey: ['admin-payments', 'succeeded-total'],
+    queryKey: queryKeys.adminPayments.succeededTotal,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('payments')
-        .select('amount')
-        .eq('status', 'succeeded')
-      if (error) throw error
-      const rows = (data ?? []) as { amount: number | string }[]
+      const rows = await fetchAllRows<{ amount: number | string }>((from, to) =>
+        supabase
+          .from('payments')
+          .select('id, amount')
+          .eq('status', 'succeeded')
+          .order('id', { ascending: true })
+          .range(from, to),
+      )
       return {
         total: rows.reduce((sum, r) => sum + Number(r.amount), 0),
         count: rows.length,
@@ -127,25 +146,20 @@ export function useSucceededPaymentsTotal() {
 // verifies them with `admin_verify_payment` (0035).
 export function useUnverifiedPayments() {
   return usePagedQuery(
-    ['admin-pending-payments', 'unverified'],
+    queryKeys.adminPendingPayments.unverified,
     async (from, to) => {
       const { data, error } = await supabase
         .from('payments')
-        .select(`${PAYMENT_SELECT}, confirmed_by`)
+        .select(PAYMENT_SELECT)
         .eq('status', 'succeeded')
         .is('confirmed_by', null)
         .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
         .range(from, to)
       if (error) throw error
-      return (data as unknown as UnverifiedPaymentRow[])
-        .filter((row) => row.status === 'succeeded' && !row.confirmed_by)
-        .map(toAdminPayment)
+      return (data as unknown as PaymentRow[]).map(toAdminPayment)
     },
   )
-}
-
-interface UnverifiedPaymentRow extends PaymentRow {
-  confirmed_by: string | null
 }
 
 export interface AwaitingPaymentBooking {
@@ -168,37 +182,30 @@ interface AwaitingBookingRow {
   decision_at: string | null
   billboards: { title: string } | null
   profiles: { display_name: string } | null
-  payments: { id: string; status: Payment['status'] }[] | null
 }
 
-const OPEN_PAYMENT_STATUSES = new Set<Payment['status']>([
-  'pending',
-  'succeeded',
-])
-
 // Approved bookings (status 'payment_pending') with no open submission yet.
+// `bookings.payment_id` points at the open payment: `renter_submit_payment`
+// sets it and `admin_reject_payment` clears it, so the filter runs in SQL —
+// filtering after `.range()` would make "Load more" pages short or empty.
 export function useAwaitingPaymentBookings() {
   return usePagedQuery(
-    ['admin-pending-payments', 'awaiting'],
+    queryKeys.adminPendingPayments.awaiting,
     async (from, to) => {
       const { data, error } = await supabase
         .from('bookings')
         .select(
           'id, price_quoted, start_date, end_date, created_at, decision_at, billboards(title), ' +
-            'profiles!bookings_renter_id_fkey(display_name), payments!payments_booking_id_fkey(id, status)',
+            'profiles!bookings_renter_id_fkey(display_name)',
         )
         .eq('status', 'payment_pending')
+        .is('payment_id', null)
         .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
         .range(from, to)
       if (error) throw error
-      return (data as unknown as AwaitingBookingRow[])
-        .filter(
-          (row) =>
-            !(row.payments ?? []).some((p) =>
-              OPEN_PAYMENT_STATUSES.has(p.status),
-            ),
-        )
-        .map((row): AwaitingPaymentBooking => ({
+      return (data as unknown as AwaitingBookingRow[]).map(
+        (row): AwaitingPaymentBooking => ({
           id: row.id,
           billboardTitle: row.billboards?.title ?? 'Billboard',
           renterName: row.profiles?.display_name ?? 'Renter',
@@ -206,18 +213,16 @@ export function useAwaitingPaymentBookings() {
           startDate: row.start_date,
           endDate: row.end_date,
           approvedAt: row.decision_at ?? row.created_at,
-        }))
+        }),
+      )
     },
   )
 }
 
+// A payment decision moves the booking (and payable/payout state), so
+// refresh everything booking-derived.
 function invalidatePaymentQueries(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: ['admin-pending-payments'] })
-  qc.invalidateQueries({ queryKey: ['admin-payments'] })
-  qc.invalidateQueries({ queryKey: ['admin-bookings'] })
-  qc.invalidateQueries({ queryKey: ['owner-bookings'] })
-  qc.invalidateQueries({ queryKey: ['my-bookings'] })
-  qc.invalidateQueries({ queryKey: ['admin-payable-bookings'] })
+  void invalidateBooking(qc)
 }
 
 export function useConfirmPayment() {

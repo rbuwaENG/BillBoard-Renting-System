@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  addDaysISO,
   bookingDays,
   hasDateErrors,
+  maxEndDate,
+  maxStartDate,
   todayISO,
   validateDateRange,
 } from './dateRange'
@@ -29,6 +32,40 @@ describe('validateDateRange', () => {
   })
   it('does not complain about empty fields', () => {
     expect(hasDateErrors(validateDateRange('', '', TODAY))).toBe(false)
+  })
+})
+
+describe('validateDateRange — server limits (0035)', () => {
+  it('allows a start exactly 365 days ahead, not 366', () => {
+    expect(maxStartDate(TODAY)).toBe('2027-10-30')
+    expect(validateDateRange('2027-10-30', '2027-10-30', TODAY).start).toBe(
+      undefined,
+    )
+    expect(validateDateRange('2027-10-31', '2027-10-31', TODAY).start).toBe(
+      'Bookings can start at most 365 days ahead',
+    )
+  })
+
+  it('allows 365 days inclusive, not 366', () => {
+    expect(maxEndDate('2026-11-01')).toBe('2027-10-31')
+    expect(bookingDays('2026-11-01', '2027-10-31')).toBe(365)
+    expect(
+      hasDateErrors(validateDateRange('2026-11-01', '2027-10-31', TODAY)),
+    ).toBe(false)
+    expect(validateDateRange('2026-11-01', '2027-11-01', TODAY).end).toBe(
+      'Bookings can be at most 365 days long',
+    )
+  })
+
+  it('counts a leap year correctly', () => {
+    // 2028 is a leap year: Jan 1 + 364 days is Dec 30.
+    expect(maxEndDate('2028-01-01')).toBe('2028-12-30')
+    expect(bookingDays('2028-01-01', '2028-12-30')).toBe(365)
+  })
+
+  it('addDaysISO crosses month and year boundaries', () => {
+    expect(addDaysISO('2026-12-31', 1)).toBe('2027-01-01')
+    expect(addDaysISO('2026-03-01', -1)).toBe('2026-02-28')
   })
 })
 

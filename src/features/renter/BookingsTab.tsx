@@ -33,7 +33,11 @@ export function BookingsTab({
 }: BookingsTabProps) {
   const formatPrice = useFormatPrice()
   const { data, isLoading, isError, error, refetch } = useMyBookings()
-  const { data: payments, isLoading: paymentsLoading } = useMyPayments()
+  const {
+    data: payments,
+    isLoading: paymentsLoading,
+    isError: paymentsError,
+  } = useMyPayments()
   const myBookings = data ?? []
   const [paying, setPaying] = useState<MyBooking | null>(null)
   const [reviewingBooking, setReviewingBooking] = useState<{
@@ -78,7 +82,7 @@ export function BookingsTab({
             Total paid
           </span>
           <p className="mt-1 truncate font-display text-lg font-semibold text-accent sm:text-xl">
-            {paymentsLoading ? '—' : formatPrice(totalSpend)}
+            {paymentsLoading || paymentsError ? '—' : formatPrice(totalSpend)}
           </p>
         </Card>
       </div>
