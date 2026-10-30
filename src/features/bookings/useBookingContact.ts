@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 
 export interface BookingContact {
@@ -14,7 +15,7 @@ export function useBookingContact(
   enabled: boolean,
 ) {
   return useQuery({
-    queryKey: ['booking-contact', bookingId],
+    queryKey: queryKeys.bookingContact(bookingId),
     queryFn: async (): Promise<BookingContact | null> => {
       const { data, error } = await supabase.rpc('get_booking_contact', {
         p_booking_id: bookingId,

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { Booking, PayoutStatus } from '@/types'
 
@@ -51,7 +52,7 @@ export function hasConfirmedPayment(
 // list when creating a payout.
 export function usePayableBookings() {
   return useQuery({
-    queryKey: ['admin-payable-bookings'],
+    queryKey: queryKeys.adminPayableBookings,
     queryFn: async (): Promise<PayableOwnerGroup[]> => {
       const [
         { data: bookings, error: bookingsError },
@@ -129,7 +130,7 @@ interface PayoutRow {
 
 export function useAdminPayouts() {
   return useQuery({
-    queryKey: ['admin-payouts'],
+    queryKey: queryKeys.adminPayouts,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('payouts')
@@ -154,9 +155,9 @@ export function useAdminPayouts() {
 }
 
 function invalidatePayoutQueries(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: ['admin-payouts'] })
-  qc.invalidateQueries({ queryKey: ['admin-payable-bookings'] })
-  qc.invalidateQueries({ queryKey: ['my-payouts'] })
+  qc.invalidateQueries({ queryKey: queryKeys.adminPayouts })
+  qc.invalidateQueries({ queryKey: queryKeys.adminPayableBookings })
+  qc.invalidateQueries({ queryKey: queryKeys.myPayouts.all })
 }
 
 export function useCreatePayout() {

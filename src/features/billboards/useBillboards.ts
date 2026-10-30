@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { BillboardStatus, TrafficLevel } from '@/types'
 
@@ -59,7 +60,12 @@ export function toBillboard(row: BillboardRow): BillboardWithDetails {
     description: row.description,
     category: row.categories?.name ?? 'Uncategorized',
     size: row.sizes?.label ?? '—',
-    location: { lat: row.lat, lng: row.lng, address: row.address, city: row.city },
+    location: {
+      lat: row.lat,
+      lng: row.lng,
+      address: row.address,
+      city: row.city,
+    },
     pricePerDay: row.price_per_day,
     salePricePerDay: row.sale_price_per_day,
     adminPriceOverridePerDay: row.admin_price_override_per_day,
@@ -79,7 +85,7 @@ const SELECT = BILLBOARD_SELECT
 
 export function useBillboards() {
   return useQuery({
-    queryKey: ['billboards'],
+    queryKey: queryKeys.billboards,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('billboards')
@@ -98,7 +104,7 @@ export function useBillboardsNear(
   radiusKm: number,
 ) {
   return useQuery({
-    queryKey: ['billboards-near', lat, lng, radiusKm],
+    queryKey: queryKeys.billboardsNear(lat, lng, radiusKm),
     queryFn: async () => {
       const { data, error } = await supabase
         .rpc('billboards_near', {

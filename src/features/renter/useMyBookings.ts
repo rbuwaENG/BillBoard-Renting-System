@@ -6,6 +6,7 @@ import {
   type PaymentState,
 } from '@/features/payments/paymentState'
 import { useAuth } from '@/hooks/useAuth'
+import { invalidateBooking, queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { Booking } from '@/types'
 
@@ -86,7 +87,7 @@ export function toMyBooking(row: BookingRow): MyBooking {
 export function useMyBookings() {
   const { user } = useAuth()
   return useQuery({
-    queryKey: ['my-bookings', user?.uid],
+    queryKey: queryKeys.myBookings(user?.uid),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('bookings')
@@ -120,9 +121,8 @@ export function useSubmitPayment() {
       if (error) throw error
       return data
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['my-bookings'] })
-      qc.invalidateQueries({ queryKey: ['my-payments'] })
+    onSuccess: (_data, vars) => {
+      invalidateBooking(qc, vars.bookingId)
     },
   })
 }

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { queryKeys } from '@/lib/queryKeys'
 import { uniqueChannelName } from '@/lib/realtime'
 import { supabase } from '@/lib/supabase'
 
@@ -63,7 +64,7 @@ function toChatMessage(row: ChatMessageRow): ChatMessage {
 export function useChatThread(billboardId: string | null) {
   const { user } = useAuth()
   return useQuery({
-    queryKey: ['chat-thread', billboardId, user?.uid],
+    queryKey: queryKeys.chatThread(billboardId, user?.uid),
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_or_create_chat_thread', {
         p_billboard_id: billboardId,
@@ -85,7 +86,8 @@ export function useStartChatThread() {
       if (error) throw error
       return toChatThread(data)
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-chat-threads'] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.myChatThreads.all }),
   })
 }
 
@@ -104,7 +106,10 @@ export function useChatMessages(threadId: string | undefined) {
           table: 'chat_messages',
           filter: `thread_id=eq.${threadId}`,
         },
-        () => qc.invalidateQueries({ queryKey: ['chat-messages', threadId] }),
+        () =>
+          qc.invalidateQueries({
+            queryKey: queryKeys.chatMessages(threadId),
+          }),
       )
       .subscribe()
     return () => {
@@ -113,7 +118,7 @@ export function useChatMessages(threadId: string | undefined) {
   }, [threadId, qc])
 
   return useQuery({
-    queryKey: ['chat-messages', threadId],
+    queryKey: queryKeys.chatMessages(threadId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('chat_messages')
@@ -150,9 +155,9 @@ export function useSendChatMessage() {
       if (error) throw error
     },
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ['chat-messages', vars.threadId] })
-      qc.invalidateQueries({ queryKey: ['my-chat-threads'] })
-      qc.invalidateQueries({ queryKey: ['owner-chat-threads'] })
+      qc.invalidateQueries({ queryKey: queryKeys.chatMessages(vars.threadId) })
+      qc.invalidateQueries({ queryKey: queryKeys.myChatThreads.all })
+      qc.invalidateQueries({ queryKey: queryKeys.ownerChatThreads.all })
     },
   })
 }
@@ -192,7 +197,7 @@ function toThreadPreview(row: ThreadPreviewRow): ChatThreadPreview {
 export function useMyChatThreads() {
   const { user } = useAuth()
   return useQuery({
-    queryKey: ['my-chat-threads', user?.uid],
+    queryKey: queryKeys.myChatThreads(user?.uid),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('chat_threads')
@@ -216,7 +221,7 @@ export function useMyChatThreads() {
 export function useOwnerChatThreads() {
   const { user } = useAuth()
   return useQuery({
-    queryKey: ['owner-chat-threads', user?.uid],
+    queryKey: queryKeys.ownerChatThreads(user?.uid),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('chat_threads')

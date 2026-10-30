@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 
 export interface DistrictProfile {
@@ -19,7 +20,7 @@ interface DistrictProfileRow {
 // audience/demographic context for the billboard's auto-detected district.
 export function useDistrictProfile(district: string | null) {
   return useQuery({
-    queryKey: ['district-profile', district],
+    queryKey: queryKeys.districtProfile(district),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('district_profiles')

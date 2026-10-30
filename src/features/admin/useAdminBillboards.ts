@@ -4,6 +4,7 @@ import {
   toBillboard,
   type BillboardRow,
 } from '@/features/billboards/useBillboards'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import { isMissingFunctionError } from './adminUtils'
 import { usePagedQuery } from './usePagedQuery'
@@ -22,10 +23,10 @@ export type ModerationFilter = (typeof MODERATION_FILTERS)[number]
 export type AdminBillboardStatus = 'active' | 'inactive' | 'flagged'
 
 function invalidateBillboardLists(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: ['admin-billboards'] })
-  qc.invalidateQueries({ queryKey: ['billboards'] })
-  qc.invalidateQueries({ queryKey: ['billboards-near'] })
-  qc.invalidateQueries({ queryKey: ['rentor-billboards'] })
+  qc.invalidateQueries({ queryKey: queryKeys.adminBillboards.all })
+  qc.invalidateQueries({ queryKey: queryKeys.billboards })
+  qc.invalidateQueries({ queryKey: queryKeys.billboardsNear.all })
+  qc.invalidateQueries({ queryKey: queryKeys.rentorBillboards.all })
 }
 
 // Admin view over the full platform catalog, regardless of status — RLS
@@ -34,7 +35,7 @@ function invalidateBillboardLists(qc: ReturnType<typeof useQueryClient>) {
 // `useAdminBillboardsPaged` instead.
 export function useAdminBillboards() {
   return useQuery({
-    queryKey: ['admin-billboards'],
+    queryKey: queryKeys.adminBillboards.all,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('billboards')
@@ -50,7 +51,7 @@ export function useAdminBillboards() {
 // filter is applied server-side so paging stays meaningful.
 export function useAdminBillboardsPaged(filter: ModerationFilter) {
   return usePagedQuery(
-    ['admin-billboards', 'paged', filter],
+    queryKeys.adminBillboards.paged(filter),
     async (from, to) => {
       let query = supabase
         .from('billboards')
@@ -66,7 +67,7 @@ export function useAdminBillboardsPaged(filter: ModerationFilter) {
 
 export function useFlaggedBillboardCount() {
   return useQuery({
-    queryKey: ['admin-billboards', 'flagged-count'],
+    queryKey: queryKeys.adminBillboards.flaggedCount,
     queryFn: async () => {
       const { count, error } = await supabase
         .from('billboards')

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { UserProfile } from '@/types'
 
@@ -34,7 +35,7 @@ const ADMIN_USERS_PAGE = 1000
 // page so the panel's client-side search/paging sees all users, newest first.
 export function useAllUsers() {
   return useQuery({
-    queryKey: ['admin-users'],
+    queryKey: queryKeys.adminUsers,
     queryFn: async () => {
       const rows: ProfileRow[] = []
       for (;;) {
@@ -68,7 +69,7 @@ export function useToggleUserStatus() {
         .eq('id', uid)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.adminUsers }),
   })
 }
 
@@ -82,7 +83,7 @@ export function usePromoteToAdmin() {
         .eq('id', uid)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.adminUsers }),
   })
 }
 
@@ -98,6 +99,6 @@ export function useInviteAdmin() {
       if (data?.error) throw new Error(data.error)
       return data
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.adminUsers }),
   })
 }

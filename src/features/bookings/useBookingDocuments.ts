@@ -1,13 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { invalidateBooking, queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import { uploadBookingCreative, uploadProofOfPosting } from './creativeStorage'
 
 export type BookingDocumentKind =
-  | 'creative'
-  | 'brief'
-  | 'logo'
-  | 'other'
-  | 'proof_of_posting'
+  'creative' | 'brief' | 'logo' | 'other' | 'proof_of_posting'
 
 // add_proof_of_posting (0033) caps proof photos per booking.
 export const MAX_PROOF_PHOTOS = 10
@@ -49,7 +46,7 @@ function toBookingDocument(row: BookingDocumentRow): BookingDocument {
 
 export function useBookingDocuments(bookingId: string | null | undefined) {
   return useQuery({
-    queryKey: ['booking-documents', bookingId],
+    queryKey: queryKeys.bookingDocuments(bookingId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('booking_documents')
@@ -89,8 +86,10 @@ export function useAddBookingDocument() {
       if (error) throw error
     },
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ['booking-documents', vars.bookingId] })
-      qc.invalidateQueries({ queryKey: ['booking-events', vars.bookingId] })
+      qc.invalidateQueries({
+        queryKey: queryKeys.bookingDocuments(vars.bookingId),
+      })
+      invalidateBooking(qc, vars.bookingId)
     },
   })
 }
@@ -101,7 +100,13 @@ export function useAddBookingDocument() {
 export function useAddProofOfPosting() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ bookingId, file }: { bookingId: string; file: File }) => {
+    mutationFn: async ({
+      bookingId,
+      file,
+    }: {
+      bookingId: string
+      file: File
+    }) => {
       const path = await uploadProofOfPosting(file, bookingId)
       const { error } = await supabase.rpc('add_proof_of_posting', {
         p_booking_id: bookingId,
@@ -114,8 +119,10 @@ export function useAddProofOfPosting() {
     },
     meta: { suppressErrorToast: true },
     onSettled: (_data, _error, vars) => {
-      qc.invalidateQueries({ queryKey: ['booking-documents', vars.bookingId] })
-      qc.invalidateQueries({ queryKey: ['booking-events', vars.bookingId] })
+      qc.invalidateQueries({
+        queryKey: queryKeys.bookingDocuments(vars.bookingId),
+      })
+      invalidateBooking(qc, vars.bookingId)
     },
   })
 }
@@ -123,14 +130,21 @@ export function useAddProofOfPosting() {
 export function useRemoveBookingDocument() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ documentId }: { documentId: string; bookingId: string }) => {
+    mutationFn: async ({
+      documentId,
+    }: {
+      documentId: string
+      bookingId: string
+    }) => {
       const { error } = await supabase.rpc('remove_booking_document', {
         p_document_id: documentId,
       })
       if (error) throw error
     },
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ['booking-documents', vars.bookingId] })
+      qc.invalidateQueries({
+        queryKey: queryKeys.bookingDocuments(vars.bookingId),
+      })
     },
   })
 }

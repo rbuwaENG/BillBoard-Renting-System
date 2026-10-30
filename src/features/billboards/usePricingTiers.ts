@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { PricingTier } from '@/types'
 
@@ -22,7 +23,7 @@ function toPricingTier(row: PricingTierRow): PricingTier {
 
 export function usePricingTiers(billboardId: string | null) {
   return useQuery({
-    queryKey: ['pricing-tiers', billboardId],
+    queryKey: queryKeys.pricingTiers.billboard(billboardId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('billboard_pricing_tiers')
@@ -85,6 +86,8 @@ export function useSavePricingTiers(billboardId: string) {
       if (deleteError) throw deleteError
     },
     onSettled: () =>
-      qc.invalidateQueries({ queryKey: ['pricing-tiers', billboardId] }),
+      qc.invalidateQueries({
+        queryKey: queryKeys.pricingTiers.billboard(billboardId),
+      }),
   })
 }

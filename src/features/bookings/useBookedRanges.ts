@@ -1,4 +1,5 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import { mergeBookedRanges, type BookedRange } from './availability'
 
@@ -14,14 +15,11 @@ export function toBookedRanges(rows: BookedRangeRow[] | null): BookedRange[] {
   }))
 }
 
-export const bookedRangesKey = (billboardId: string) =>
-  ['booked-ranges', billboardId] as const
-
 // Shared by the single-billboard hook, the cart (one per board) and the
 // browse "available between" filter, so they all hit the same cache entry.
 export function bookedRangesQueryOptions(billboardId: string) {
   return {
-    queryKey: bookedRangesKey(billboardId),
+    queryKey: queryKeys.bookedRanges(billboardId),
     queryFn: async (): Promise<BookedRange[]> => {
       const { data, error } = await supabase.rpc(
         'get_billboard_booked_ranges',
