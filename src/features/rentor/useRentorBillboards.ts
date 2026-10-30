@@ -3,6 +3,11 @@ import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
 import type { BillboardStatus, TrafficLevel } from '@/types'
 
+// Contract 2: owners may switch a listing among active/inactive/archived, but
+// never out of `flagged` (enforced server-side). `'archived'` is added here
+// until the shared BillboardStatus type carries it.
+export type OwnerBillboardStatus = BillboardStatus | 'archived'
+
 export interface RentorBillboard {
   id: string
   ownerId: string
@@ -17,7 +22,7 @@ export interface RentorBillboard {
   salePricePerDay: number | null
   adminPriceOverridePerDay: number | null
   images: string[]
-  status: BillboardStatus
+  status: OwnerBillboardStatus
   district: string | null
   trafficLevel: TrafficLevel | null
   rating: { avg: number; count: number }
@@ -56,7 +61,7 @@ interface RentorBillboardRow {
   sale_price_per_day: number | null
   admin_price_override_per_day: number | null
   images: string[]
-  status: BillboardStatus
+  status: OwnerBillboardStatus
   district: string | null
   traffic_level: TrafficLevel | null
   rating_avg: number
@@ -77,7 +82,12 @@ function toRentorBillboard(row: RentorBillboardRow): RentorBillboard {
     sizeId: row.size_id,
     category: row.categories?.name ?? 'Uncategorized',
     size: row.sizes?.label ?? '—',
-    location: { lat: row.lat, lng: row.lng, address: row.address, city: row.city },
+    location: {
+      lat: row.lat,
+      lng: row.lng,
+      address: row.address,
+      city: row.city,
+    },
     pricePerDay: row.price_per_day,
     salePricePerDay: row.sale_price_per_day,
     adminPriceOverridePerDay: row.admin_price_override_per_day,
@@ -121,7 +131,9 @@ export async function uploadBillboardImages(
       .from('billboard-images')
       .upload(path, file)
     if (error) throw error
-    const { data } = supabase.storage.from('billboard-images').getPublicUrl(path)
+    const { data } = supabase.storage
+      .from('billboard-images')
+      .getPublicUrl(path)
     urls.push(data.publicUrl)
   }
   return urls
@@ -197,7 +209,13 @@ export function useUpdateBillboard() {
 export function useSetBillboardStatus() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: BillboardStatus }) => {
+    mutationFn: async ({
+      id,
+      status,
+    }: {
+      id: string
+      status: OwnerBillboardStatus
+    }) => {
       const { error } = await supabase
         .from('billboards')
         .update({ status })

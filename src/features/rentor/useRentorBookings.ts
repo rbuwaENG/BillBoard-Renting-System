@@ -55,7 +55,9 @@ export function useOwnerBookings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('bookings')
-        .select('*, billboards(title), profiles!bookings_renter_id_fkey(display_name)')
+        .select(
+          '*, billboards(title), profiles!bookings_renter_id_fkey(display_name)',
+        )
         .eq('owner_id', user!.uid)
         .order('created_at', { ascending: false })
       if (error) throw error

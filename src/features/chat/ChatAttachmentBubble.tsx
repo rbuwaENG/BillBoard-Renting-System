@@ -40,7 +40,11 @@ export function ChatAttachmentBubble({ path }: { path: string }) {
 
   if (kind === 'video') {
     return url ? (
-      <video src={url} controls className="max-h-48 max-w-full border border-current/10" />
+      <video
+        src={url}
+        controls
+        className="max-h-48 max-w-full border border-current/10"
+      />
     ) : (
       <p className="text-xs opacity-60">Loading video…</p>
     )
