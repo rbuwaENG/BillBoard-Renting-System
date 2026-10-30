@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { estimateCartTotal } from '@/features/billboards/pricing'
@@ -10,6 +10,12 @@ import {
   todayISO,
   validateDateRange,
 } from '@/features/bookings/dateRange'
+import { AvailabilityCalendar } from '@/features/bookings/AvailabilityCalendar'
+import {
+  OVERLAP_MESSAGE,
+  rangeOverlapsBooked,
+} from '@/features/bookings/availability'
+import { useCombinedBookedRanges } from '@/features/bookings/useBookedRanges'
 import { useCreateCampaign } from '@/features/renter/useCampaigns'
 import { cn } from '@/lib/utils'
 import { useCampaignStore } from './campaignStore'
@@ -34,7 +40,6 @@ export function CampaignDraftForm({
 }: CampaignDraftFormProps) {
   const formatPrice = useFormatPrice()
   const today = todayISO()
-  const fieldId = useId()
   const [name, setName] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -43,8 +48,13 @@ export function CampaignDraftForm({
   const { data: tiersByBillboard, isLoading: tiersLoading } =
     useCartPricingTiers(draftBillboards.map((b) => b.id))
 
+  // A campaign books every board for the same dates, so a day booked on any
+  // of them is unavailable for the whole cart.
+  const booked = useCombinedBookedRanges(draftBillboards.map((b) => b.id))
+
   const dateErrors = validateDateRange(startDate, endDate, today)
-  const datesInvalid = hasDateErrors(dateErrors)
+  const overlapsBooking = rangeOverlapsBooked(startDate, endDate, booked.ranges)
+  const datesInvalid = hasDateErrors(dateErrors) || overlapsBooking
   const days = datesInvalid ? 0 : bookingDays(startDate, endDate)
   const total = estimateCartTotal(draftBillboards, days, tiersByBillboard ?? {})
   const tooMany = draftBillboards.length > MAX_CAMPAIGN_BILLBOARDS
@@ -96,41 +106,41 @@ export function CampaignDraftForm({
           className={inputClass}
         />
       </label>
-      <div className="flex gap-2">
-        <label className="block w-1/2">
-          <span className={labelClass}>Start date</span>
-          <input
-            type="date"
-            value={startDate}
-            min={today}
-            aria-invalid={!!dateErrors.start}
-            aria-describedby={dateErrors.start ? `${fieldId}-start` : undefined}
-            onChange={(e) => setStartDate(e.target.value)}
-            className={inputClass}
-          />
-        </label>
-        <label className="block w-1/2">
-          <span className={labelClass}>End date</span>
-          <input
-            type="date"
-            value={endDate}
-            min={startDate && startDate > today ? startDate : today}
-            aria-invalid={!!dateErrors.end}
-            aria-describedby={dateErrors.end ? `${fieldId}-end` : undefined}
-            onChange={(e) => setEndDate(e.target.value)}
-            className={inputClass}
-          />
-        </label>
+      <div>
+        <span className={labelClass}>Dates</span>
+        <AvailabilityCalendar
+          compact={compact}
+          label="Campaign dates"
+          today={today}
+          value={{ startDate, endDate }}
+          onChange={(next) => {
+            setStartDate(next.startDate)
+            setEndDate(next.endDate)
+          }}
+          bookedRanges={booked.ranges}
+          bookedLegend={
+            draftBillboards.length > 1 ? 'Booked (any in cart)' : 'Booked'
+          }
+          notice={
+            booked.isLoading ? (
+              <span className="text-ink/50 dark:text-paper/50">
+                Loading availability…
+              </span>
+            ) : booked.isError ? (
+              <span className="text-ink/60 dark:text-paper/60">
+                Availability couldn't be loaded for every billboard — dates are
+                checked when the campaign is created.
+              </span>
+            ) : null
+          }
+        />
       </div>
-      {dateErrors.start && (
-        <p id={`${fieldId}-start`} className="text-xs text-brand-error">
-          {dateErrors.start}
-        </p>
-      )}
-      {dateErrors.end && (
-        <p id={`${fieldId}-end`} className="text-xs text-brand-error">
-          {dateErrors.end}
-        </p>
+      {(dateErrors.start || dateErrors.end || overlapsBooking) && (
+        <div role="alert" className="space-y-1 text-xs text-brand-error">
+          {dateErrors.start && <p>{dateErrors.start}</p>}
+          {dateErrors.end && <p>{dateErrors.end}</p>}
+          {overlapsBooking && <p>{OVERLAP_MESSAGE}</p>}
+        </div>
       )}
       {tooMany && (
         <p className="text-xs text-brand-error">
@@ -153,7 +163,7 @@ export function CampaignDraftForm({
           )}
         </p>
       )}
-      {createCampaign.isError && (
+      {createCampaign.isError && !overlapsBooking && (
         <p role="alert" className="text-xs text-brand-error">
           {(createCampaign.error as Error).message}
         </p>

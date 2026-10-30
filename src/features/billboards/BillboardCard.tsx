@@ -1,11 +1,11 @@
 import { Check, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { BillboardMark } from '@/components'
 import { loginPath } from '@/features/auth/redirect'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import { BillboardPhoto } from './BillboardPhoto'
 import { getDisplayPrice } from './pricing'
 import { RatingSummary } from './RatingSummary'
 import { TRAFFIC_LABELS } from './trafficLevel'
@@ -86,10 +86,14 @@ export function BillboardCard({
         aria-current={selected ? 'true' : undefined}
         className="block w-full cursor-pointer text-left focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
       >
-        {/* Deterministic placeholder "photo" panel — no stock images, so
-            nothing depends on an external host. */}
-        <div className="relative flex h-24 items-center justify-center overflow-hidden bg-paper-dim dark:bg-ink">
-          <BillboardMark className="size-10 text-ink/10 dark:text-paper/10" />
+        {/* Cover photo (first image), lazy-loaded; the brand placeholder
+            stands in when there's none or it fails to load. */}
+        <div className="relative">
+          <BillboardPhoto
+            src={billboard.images[0]}
+            alt={`Photo of ${billboard.title}`}
+            className="aspect-[3/1] w-full"
+          />
           <span className="absolute top-2 left-2 bg-ink px-1.5 py-0.5 font-mono text-[10px] tracking-widest text-paper uppercase dark:bg-paper dark:text-ink">
             {billboard.category}
           </span>

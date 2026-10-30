@@ -17,9 +17,18 @@ import { MapOverlayControls } from './MapOverlayControls'
 import { useMapPopoverStore, type ActivityTabKey } from './mapPopoverStore'
 import { TrafficLegend } from './TrafficLegend'
 import { useBillboard } from './useBillboard'
+import {
+  AVAILABILITY_CHECK_LIMIT,
+  useAvailabilityFilter,
+} from './useAvailabilityFilter'
 import { useBillboards, useBillboardsNear } from './useBillboards'
 
-const ACTIVITY_TABS: ActivityTabKey[] = ['bookings', 'payments', 'campaigns', 'messages']
+const ACTIVITY_TABS: ActivityTabKey[] = [
+  'bookings',
+  'payments',
+  'campaigns',
+  'messages',
+]
 
 const DEFAULT_CENTER: [number, number] = [20.5937, 78.9629]
 const MIN_ZOOM = 3
@@ -72,6 +81,8 @@ export function BillboardBrowsePage() {
     new Set(),
   )
   const [priceMax, setPriceMax] = useState<number | null>(null)
+  const [availableFrom, setAvailableFrom] = useState('')
+  const [availableTo, setAvailableTo] = useState('')
   const [myBillboardsActive, setMyBillboardsActive] = useState(false)
   const [nearMeActive, setNearMeActive] = useState(false)
   const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS_KM)
@@ -189,7 +200,14 @@ export function BillboardBrowsePage() {
     setSearchParams(next, { replace: true })
     // handleSelect/openActivity are stable in effect; re-run only on input changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [billboardParam, bookingParam, activityParam, myBookings, role, authLoading])
+  }, [
+    billboardParam,
+    bookingParam,
+    activityParam,
+    myBookings,
+    role,
+    authLoading,
+  ])
 
   function toggleCategory(category: string) {
     setSelectedCategories((prev) => {
@@ -228,9 +246,7 @@ export function BillboardBrowsePage() {
     let list = baseList
     if (q) {
       list = list.filter((b) =>
-        `${b.title} ${b.location.city} ${b.category}`
-          .toLowerCase()
-          .includes(q),
+        `${b.title} ${b.location.city} ${b.category}`.toLowerCase().includes(q),
       )
     }
     if (selectedCategories.size > 0) {
@@ -288,6 +304,30 @@ export function BillboardBrowsePage() {
     }
   }, [searched, nearMeActive, userCoords, radiusKm, baseEmptyMessage])
 
+  // "Available between": applied last, to the list in display order, so the
+  // capped per-billboard checks cover what the user sees first.
+  const availability = useAvailabilityFilter(
+    results,
+    availableFrom,
+    availableTo,
+  )
+  const visibleResults = availability.results
+  const availabilityNotice = availability.active
+    ? [
+        availability.checking && 'Checking availability…',
+        availability.uncheckedCount > 0 &&
+          `Availability was checked for the first ${AVAILABILITY_CHECK_LIMIT} matches only — narrow the other filters to see the rest.`,
+        availability.failedCount > 0 &&
+          `Couldn't check availability for ${availability.failedCount} billboard${availability.failedCount !== 1 ? 's' : ''}; they're still shown.`,
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : ''
+  const visibleEmptyMessage =
+    availability.active && !availability.checking && results.length > 0
+      ? 'No billboards matching your filters are free for the whole date range.'
+      : emptyMessage
+
   return (
     <div className="relative h-[calc(100svh-4rem)] w-full">
       <MapContainer
@@ -313,7 +353,7 @@ export function BillboardBrowsePage() {
           radiusKm={radiusKm}
         />
         <BillboardMarkers
-          billboards={results}
+          billboards={visibleResults}
           selectedId={selectedId}
           onViewDetails={handleSelect}
         />
@@ -338,6 +378,12 @@ export function BillboardBrowsePage() {
         onPriceMaxChange={setPriceMax}
         myBillboardsActive={myBillboardsActive}
         onToggleMyBillboards={() => setMyBillboardsActive((v) => !v)}
+        availableFrom={availableFrom}
+        availableTo={availableTo}
+        onAvailableChange={(from, to) => {
+          setAvailableFrom(from)
+          setAvailableTo(to)
+        }}
         nearMeActive={nearMeActive}
         onLocateMe={handleLocateMe}
         onDisableNearMe={() => setNearMeActive(false)}
@@ -359,14 +405,15 @@ export function BillboardBrowsePage() {
       />
 
       <BillboardPanel
-        results={results}
+        results={visibleResults}
         query={query}
         onQueryChange={setQuery}
         selectedId={selectedId}
         onSelect={handleSelect}
         locateStatus={locateStatus}
         distanceById={distanceById}
-        emptyMessage={emptyMessage}
+        emptyMessage={visibleEmptyMessage}
+        notice={availabilityNotice || undefined}
         isLoading={billboardsLoading}
         isError={billboardsError}
         error={billboardsErrorValue}

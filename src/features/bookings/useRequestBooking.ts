@@ -21,7 +21,8 @@ export function useRequestBooking() {
       if (error) throw error
       return data
     },
-    onSuccess: () => {
+    onSuccess: (_data, input) => {
+      qc.invalidateQueries({ queryKey: ['booked-ranges', input.billboardId] })
       qc.invalidateQueries({ queryKey: ['my-bookings'] })
       qc.invalidateQueries({ queryKey: ['owner-bookings'] })
     },

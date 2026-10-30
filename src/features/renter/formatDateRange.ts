@@ -1,8 +1,9 @@
+import { formatShortDateRange } from '@/features/bookings/availability'
+
 // Shared by BookingsTab/CampaignsTab/MessagesTab — every renter-panel tab
-// that shows a date range formats it the same way.
+// that shows a date range formats it the same way. Booking dates are plain
+// `YYYY-MM-DD` and are parsed as local dates (not UTC midnight), so they
+// don't show a day early west of UTC.
 export function formatDateRange(start: string, end: string) {
-  const s = new Date(start)
-  const e = new Date(end)
-  const short: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
-  return `${s.toLocaleDateString('en-US', short)} – ${e.toLocaleDateString('en-US', { ...short, year: 'numeric' })}`
+  return formatShortDateRange(start, end)
 }

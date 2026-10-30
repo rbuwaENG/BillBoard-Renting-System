@@ -32,11 +32,11 @@ export function validateDateRange(
 ): DateRangeErrors {
   const errors: DateRangeErrors = {}
   if (startDate && startDate < today)
-    errors.start = "Start date can't be in the past."
+    errors.start = 'Start date cannot be in the past'
   if (startDate && endDate && endDate < startDate) {
     errors.end = 'End date must be on or after the start date.'
   } else if (!startDate && endDate && endDate < today) {
-    errors.end = "End date can't be in the past."
+    errors.end = 'End date cannot be in the past'
   }
   return errors
 }
