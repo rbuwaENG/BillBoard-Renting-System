@@ -19,16 +19,25 @@ export function ProfilePage() {
   const [phone, setPhone] = useState(user?.phone ?? '')
   const [photoURL, setPhotoURL] = useState(user?.photoURL ?? '')
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   if (!user) return null
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    await updateProfile({
-      displayName: displayName.trim() || user!.displayName,
-      phone: phone.trim() || undefined,
-      photoURL: photoURL.trim() || undefined,
-    })
+    setSaveError(null)
+    try {
+      await updateProfile({
+        displayName: displayName.trim() || user!.displayName,
+        phone: phone.trim() || undefined,
+        photoURL: photoURL.trim() || undefined,
+      })
+    } catch (err) {
+      setSaveError(
+        err instanceof Error ? err.message : 'Could not save your changes.',
+      )
+      return
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -114,6 +123,11 @@ export function ProfilePage() {
             <Button type="submit">Save changes</Button>
             {saved && (
               <span className="text-xs text-brand-success">Saved.</span>
+            )}
+            {saveError && (
+              <span role="alert" className="text-xs text-brand-error">
+                {saveError}
+              </span>
             )}
           </div>
         </form>
