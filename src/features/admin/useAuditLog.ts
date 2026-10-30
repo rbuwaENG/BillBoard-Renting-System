@@ -1,3 +1,4 @@
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import { usePagedQuery } from './usePagedQuery'
 
@@ -74,7 +75,7 @@ export function localDayStartIso(day: string, addDays = 0): string {
 }
 
 export function useAuditLog(filters: AuditLogFilters) {
-  return usePagedQuery(['admin-audit-log', filters], async (from, to) => {
+  return usePagedQuery(queryKeys.adminAuditLog(filters), async (from, to) => {
     let query = supabase
       .from('admin_audit_log')
       .select(AUDIT_SELECT)

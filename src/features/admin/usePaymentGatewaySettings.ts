@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 
 export interface PaymentGatewaySettings {
@@ -28,7 +29,7 @@ function toPaymentGatewaySettings(
 
 export function usePaymentGatewaySettings() {
   return useQuery({
-    queryKey: ['payment-gateway-settings'],
+    queryKey: queryKeys.paymentGatewaySettings,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('payment_gateway_settings')
@@ -61,6 +62,6 @@ export function useUpdatePaymentGatewaySettings() {
       if (error) throw error
     },
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ['payment-gateway-settings'] }),
+      qc.invalidateQueries({ queryKey: queryKeys.paymentGatewaySettings }),
   })
 }

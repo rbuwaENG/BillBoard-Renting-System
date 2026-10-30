@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { PricingTierLike } from './pricing'
 
@@ -29,7 +30,7 @@ export function groupTiersByBillboard(
 export function useCartPricingTiers(billboardIds: string[]) {
   const ids = [...billboardIds].sort()
   return useQuery({
-    queryKey: ['pricing-tiers', 'cart', ids],
+    queryKey: queryKeys.pricingTiers.cart(ids),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('billboard_pricing_tiers')

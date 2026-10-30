@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { BillboardStatus, TrafficLevel } from '@/types'
 
@@ -106,7 +107,7 @@ const SELECT = '*, categories(name), sizes(label)'
 export function useRentorBillboards() {
   const { user } = useAuth()
   return useQuery({
-    queryKey: ['rentor-billboards', user?.uid],
+    queryKey: queryKeys.rentorBillboards(user?.uid),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('billboards')
@@ -140,9 +141,9 @@ export async function uploadBillboardImages(
 }
 
 function invalidateBillboardQueries(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: ['rentor-billboards'] })
-  qc.invalidateQueries({ queryKey: ['billboards'] })
-  qc.invalidateQueries({ queryKey: ['billboards-near'] })
+  qc.invalidateQueries({ queryKey: queryKeys.rentorBillboards.all })
+  qc.invalidateQueries({ queryKey: queryKeys.billboards })
+  qc.invalidateQueries({ queryKey: queryKeys.billboardsNear.all })
 }
 
 export function useCreateBillboard() {

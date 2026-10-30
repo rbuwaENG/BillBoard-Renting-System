@@ -27,14 +27,20 @@ function renderRoutes(initialPath: string) {
             errorElement: <RouteErrorBoundary />,
           },
           {
-            path: 'broken-chunk',
-            lazy: () =>
-              Promise.reject(
-                new TypeError(
-                  'Failed to fetch dynamically imported module: /assets/x.js',
-                ),
-              ),
+            // As in router.tsx, the boundary sits on an ancestor: react-router
+            // 7 doesn't render a failed lazy route's own errorElement.
             errorElement: <RouteErrorBoundary />,
+            children: [
+              {
+                path: 'broken-chunk',
+                lazy: () =>
+                  Promise.reject(
+                    new TypeError(
+                      'Failed to fetch dynamically imported module: /assets/x.js',
+                    ),
+                  ),
+              },
+            ],
           },
         ],
       },
@@ -78,6 +84,7 @@ describe('RouteErrorBoundary', () => {
     expect(
       await screen.findByRole('heading', { name: 'Update available' }),
     ).toBeInTheDocument()
+    expect(screen.getByText('Site header')).toBeInTheDocument()
   })
 
   it('reloads the page on "Try again"', async () => {

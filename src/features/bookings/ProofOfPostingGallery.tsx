@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { ImageOff } from 'lucide-react'
 import { useMemo } from 'react'
+import { queryKeys } from '@/lib/queryKeys'
 import { getBookingCreativeUrl } from './creativeStorage'
 import { useBookingDocuments } from './useBookingDocuments'
 
@@ -19,7 +20,7 @@ export function ProofOfPostingGallery({ bookingId }: { bookingId: string }) {
   const paths = proofs.map((p) => p.storagePath)
 
   const urls = useQuery({
-    queryKey: ['proof-of-posting-urls', bookingId, paths],
+    queryKey: queryKeys.proofOfPostingUrls(bookingId, paths),
     queryFn: async () => {
       const entries = await Promise.all(
         paths.map(

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatPrice } from '@/lib/currency'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 
 const DEFAULT_CURRENCY = 'LKR'
@@ -32,7 +33,7 @@ function toPlatformSettings(row: PlatformSettingsRow): PlatformSettings {
 
 export function useCurrencySetting() {
   return useQuery({
-    queryKey: ['platform-settings'],
+    queryKey: queryKeys.platformSettings,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('platform_settings')
@@ -57,7 +58,8 @@ export function useUpdateCurrency() {
         .eq('id', true)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['platform-settings'] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.platformSettings }),
   })
 }
 
@@ -81,7 +83,8 @@ export function useUpdatePlatformSettings() {
         .eq('id', true)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['platform-settings'] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: queryKeys.platformSettings }),
   })
 }
 

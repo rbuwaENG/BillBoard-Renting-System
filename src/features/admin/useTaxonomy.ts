@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { BillboardSize, Category } from '@/types'
 import { getErrorCode, plural } from './adminUtils'
@@ -30,7 +31,7 @@ export async function explainDeleteError(
 
 export function useCategories() {
   return useQuery({
-    queryKey: ['categories'],
+    queryKey: queryKeys.categories,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
@@ -44,7 +45,7 @@ export function useCategories() {
 
 export function useSizes() {
   return useQuery({
-    queryKey: ['sizes'],
+    queryKey: queryKeys.sizes,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('sizes')
@@ -63,7 +64,7 @@ export function useAddCategory() {
       const { error } = await supabase.from('categories').insert({ name })
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['categories'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.categories }),
   })
 }
 
@@ -75,7 +76,7 @@ export function useRemoveCategory() {
       if (error)
         throw await explainDeleteError(error, 'category_id', id, 'category')
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['categories'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.categories }),
   })
 }
 
@@ -90,7 +91,7 @@ export function useAddSize() {
       const { error } = await supabase.from('sizes').insert(input)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sizes'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.sizes }),
   })
 }
 
@@ -101,6 +102,6 @@ export function useRemoveSize() {
       const { error } = await supabase.from('sizes').delete().eq('id', id)
       if (error) throw await explainDeleteError(error, 'size_id', id, 'size')
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sizes'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.sizes }),
   })
 }

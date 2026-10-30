@@ -21,7 +21,7 @@ const SIGNUP_ROLES: { role: UserRole; label: string; hint: string }[] = [
 
 const signupSchema = z.object({
   name: z.string().min(1, 'Enter your name'),
-  email: z.string().email('Enter a valid email address'),
+  email: z.email('Enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   role: z.enum(['renter', 'rentor']),
 })

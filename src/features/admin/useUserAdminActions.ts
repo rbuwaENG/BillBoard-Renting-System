@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { UserProfile, UserRole } from '@/types'
 
@@ -17,7 +18,7 @@ export function useSetUserRole() {
         .eq('id', uid)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.adminUsers }),
   })
 }
 
@@ -37,6 +38,6 @@ export function useSetUserStatus() {
         .eq('id', uid)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.adminUsers }),
   })
 }

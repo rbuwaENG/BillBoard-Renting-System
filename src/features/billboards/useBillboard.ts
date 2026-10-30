@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import {
   BILLBOARD_SELECT,
@@ -11,7 +12,7 @@ import {
 // non-owners, so null means "not found or no longer listed".
 export function useBillboard(id: string | null | undefined) {
   return useQuery({
-    queryKey: ['billboard', id],
+    queryKey: queryKeys.billboard(id),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('billboards')

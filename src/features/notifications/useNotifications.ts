@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { queryKeys } from '@/lib/queryKeys'
 import { uniqueChannelName } from '@/lib/realtime'
 import { supabase } from '@/lib/supabase'
 import type { Notification } from '@/types'
@@ -47,7 +48,7 @@ export function useMyNotifications() {
           table: 'notifications',
           filter: `user_id=eq.${uid}`,
         },
-        () => qc.invalidateQueries({ queryKey: ['notifications', uid] }),
+        () => qc.invalidateQueries({ queryKey: queryKeys.notifications(uid) }),
       )
       .subscribe()
     return () => {
@@ -56,7 +57,7 @@ export function useMyNotifications() {
   }, [uid, qc])
 
   return useQuery({
-    queryKey: ['notifications', uid],
+    queryKey: queryKeys.notifications(uid),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('notifications')
@@ -83,6 +84,6 @@ export function useMarkNotificationsRead() {
       if (error) throw error
     },
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ['notifications', user?.uid] }),
+      qc.invalidateQueries({ queryKey: queryKeys.notifications(user?.uid) }),
   })
 }

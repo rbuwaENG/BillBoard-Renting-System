@@ -1,21 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { invalidateBooking } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './useAuth'
 
 const THROTTLE_MS = 10 * 60 * 1000
 const STORAGE_KEY = 'last-lifecycle-advance-at'
-
-// Queries whose rows can change when bookings move between statuses.
-const AFFECTED_QUERY_KEYS = [
-  'my-bookings',
-  'owner-bookings',
-  'admin-bookings',
-  'admin-payable-bookings',
-  'booking-events',
-  'my-campaigns',
-  'notifications',
-] as const
 
 // localStorage can be unavailable (privacy mode, blocked site data) or throw
 // on access; the throttle is only an optimisation, so fail open.
@@ -61,11 +51,8 @@ export function useAdvanceBookingLifecycle() {
         // Only throttle after a successful run, so a transient failure is
         // retried on the next dashboard load instead of 10 minutes later.
         writeLastRun(Date.now())
-        await Promise.all(
-          AFFECTED_QUERY_KEYS.map((key) =>
-            qc.invalidateQueries({ queryKey: [key] }),
-          ),
-        )
+        // Bookings may have moved status: refresh everything derived from them.
+        await invalidateBooking(qc)
       } catch (error) {
         console.warn('advance_booking_lifecycle failed', error)
       } finally {

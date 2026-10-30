@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { Booking } from '@/types'
 import { usePagedQuery } from './usePagedQuery'
@@ -53,7 +54,7 @@ interface JoinedBookingRow extends BookingRow {
 
 // Paged ("Load more") bookings table for the Bookings tab, newest first.
 export function useAdminBookingsPaged() {
-  return usePagedQuery(['admin-bookings', 'paged'], async (from, to) => {
+  return usePagedQuery(queryKeys.adminBookings.paged, async (from, to) => {
     const { data, error } = await supabase
       .from('bookings')
       .select(
@@ -78,7 +79,7 @@ export function useAdminBookingsPaged() {
 // admin to see every booking, not just ones they're a participant in.
 export function useAllBookings() {
   return useQuery({
-    queryKey: ['admin-bookings'],
+    queryKey: queryKeys.adminBookings.all,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('bookings')

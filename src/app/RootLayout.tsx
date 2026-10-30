@@ -7,6 +7,7 @@ import { useAuth, useAuthStore } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import type { UserRole } from '@/types'
 import { NavigationProgress } from './PageLoader'
+import { ProfileErrorBanner } from './ProfileError'
 
 const DEFAULT_SITE_NAME = 'Billboard Renting System'
 
@@ -24,7 +25,7 @@ const NAV_LINKS: NavLinkDef[] = [
 ]
 
 export function RootLayout() {
-  const { user, role } = useAuth()
+  const { user, role, profileError } = useAuth()
   const signOut = useAuthStore((s) => s.signOut)
   const { data: settings } = useCurrencySetting()
   const siteName = settings?.siteName || DEFAULT_SITE_NAME
@@ -124,6 +125,7 @@ export function RootLayout() {
           )}
         </div>
       </header>
+      {!user && profileError && <ProfileErrorBanner />}
 
       <main
         id="main-content"

@@ -7,7 +7,7 @@ import { BillboardMark, Button } from '@/components'
 import { supabase } from '@/lib/supabase'
 
 const forgotSchema = z.object({
-  email: z.string().email('Enter a valid email address'),
+  email: z.email('Enter a valid email address'),
 })
 
 type ForgotFormValues = z.infer<typeof forgotSchema>

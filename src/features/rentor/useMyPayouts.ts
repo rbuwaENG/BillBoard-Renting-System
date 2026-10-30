@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { Payout } from '@/types'
 import {
@@ -60,7 +61,7 @@ async function fetchMyPayouts(ownerId: string) {
 export function useMyPayouts() {
   const { user } = useAuth()
   return useQuery({
-    queryKey: ['my-payouts', user?.uid],
+    queryKey: queryKeys.myPayouts.summary(user?.uid),
     queryFn: () => fetchMyPayouts(user!.uid),
     enabled: !!user,
   })
@@ -93,7 +94,7 @@ const LEDGER_STATUSES = ['payment_pending', 'confirmed', 'active', 'completed']
 export function useOwnerEarningsLedger() {
   const { user } = useAuth()
   return useQuery({
-    queryKey: ['my-payouts', user?.uid, 'ledger'],
+    queryKey: queryKeys.myPayouts.ledger(user?.uid),
     queryFn: async () => {
       const ownerId = user!.uid
       const [payouts, bookingsRes, paymentsRes] = await Promise.all([

@@ -12,7 +12,7 @@ const resetSchema = z
     confirm: z.string(),
   })
   .refine((v) => v.password === v.confirm, {
-    message: "Passwords don't match",
+    error: "Passwords don't match",
     path: ['confirm'],
   })
 
