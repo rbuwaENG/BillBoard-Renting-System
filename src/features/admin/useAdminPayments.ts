@@ -122,6 +122,32 @@ export function useSucceededPaymentsTotal() {
   })
 }
 
+// Legacy payments: 'succeeded' but never verified by an admin (0031 stripped
+// the renter self-confirmations). They can't be paid out until an admin
+// verifies them with `admin_verify_payment` (0035).
+export function useUnverifiedPayments() {
+  return usePagedQuery(
+    ['admin-pending-payments', 'unverified'],
+    async (from, to) => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`${PAYMENT_SELECT}, confirmed_by`)
+        .eq('status', 'succeeded')
+        .is('confirmed_by', null)
+        .order('created_at', { ascending: true })
+        .range(from, to)
+      if (error) throw error
+      return (data as unknown as UnverifiedPaymentRow[])
+        .filter((row) => row.status === 'succeeded' && !row.confirmed_by)
+        .map(toAdminPayment)
+    },
+  )
+}
+
+interface UnverifiedPaymentRow extends PaymentRow {
+  confirmed_by: string | null
+}
+
 export interface AwaitingPaymentBooking {
   id: string
   billboardTitle: string
@@ -225,6 +251,21 @@ export function useRejectPayment() {
       })
       if (error) throw error
     },
+    onSuccess: () => invalidatePaymentQueries(qc),
+  })
+}
+
+// The confirm dialog shows the error inline, so no global toast.
+export function useVerifyPayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (paymentId: string) => {
+      const { error } = await supabase.rpc('admin_verify_payment', {
+        p_payment_id: paymentId,
+      })
+      if (error) throw error
+    },
+    meta: { suppressErrorToast: true },
     onSuccess: () => invalidatePaymentQueries(qc),
   })
 }
