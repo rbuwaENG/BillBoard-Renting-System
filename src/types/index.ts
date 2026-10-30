@@ -14,7 +14,7 @@ export interface UserProfile {
   createdAt: string
 }
 
-export type BillboardStatus = 'active' | 'inactive' | 'flagged'
+export type BillboardStatus = 'active' | 'inactive' | 'flagged' | 'archived'
 
 export type TrafficLevel = 'light' | 'moderate' | 'heavy'
 
@@ -62,6 +62,7 @@ export type BookingStatus =
   | 'active'
   | 'completed'
   | 'cancelled'
+  | 'expired'
 
 export interface Booking {
   id: string

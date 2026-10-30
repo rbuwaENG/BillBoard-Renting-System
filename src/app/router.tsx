@@ -42,6 +42,24 @@ export const routes: RouteObject[] = [
             }),
           },
           {
+            path: 'forgot-password',
+            lazy: async () => ({
+              Component: (await import('@/features/auth')).ForgotPasswordPage,
+            }),
+          },
+          {
+            path: 'reset-password',
+            lazy: async () => ({
+              Component: (await import('@/features/auth')).ResetPasswordPage,
+            }),
+          },
+          {
+            path: 'billboards/:id',
+            lazy: async () => ({
+              Component: (await import('@/features/billboards')).BillboardPage,
+            }),
+          },
+          {
             path: 'profile',
             element: <RoleGuard allow={['renter', 'rentor', 'admin']} />,
             errorElement: <RouteErrorBoundary />,
