@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
+import { invalidateBooking, queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { Booking } from '@/types'
 
@@ -51,11 +52,13 @@ function toRentorBookingRequest(row: BookingRow): RentorBookingRequest {
 export function useOwnerBookings() {
   const { user } = useAuth()
   return useQuery({
-    queryKey: ['owner-bookings', user?.uid],
+    queryKey: queryKeys.ownerBookings(user?.uid),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('bookings')
-        .select('*, billboards(title), profiles!bookings_renter_id_fkey(display_name)')
+        .select(
+          '*, billboards(title), profiles!bookings_renter_id_fkey(display_name)',
+        )
         .eq('owner_id', user!.uid)
         .order('created_at', { ascending: false })
       if (error) throw error
@@ -84,9 +87,8 @@ export function useRespondToBooking() {
       })
       if (error) throw error
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['owner-bookings'] })
-      qc.invalidateQueries({ queryKey: ['my-bookings'] })
+    onSuccess: (_data, vars) => {
+      invalidateBooking(qc, vars.bookingId)
     },
   })
 }

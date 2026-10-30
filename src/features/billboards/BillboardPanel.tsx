@@ -1,5 +1,6 @@
 import { LayoutList, Search } from 'lucide-react'
 import { useState } from 'react'
+import { ListState } from '@/features/renter/ListState'
 import { cn } from '@/lib/utils'
 import { BillboardCard } from './BillboardCard'
 import { MapIconButton } from './MapIconButton'
@@ -15,6 +16,12 @@ interface BillboardPanelProps {
   locateStatus: LocateStatus
   distanceById: Map<string, number>
   emptyMessage: string
+  // Status line above the results (e.g. availability-filter progress).
+  notice?: string
+  isLoading?: boolean
+  isError?: boolean
+  error?: unknown
+  onRetry?: () => void
 }
 
 // A floating search bar + list-toggle icon (top-left), matching the
@@ -29,6 +36,11 @@ export function BillboardPanel({
   locateStatus,
   distanceById,
   emptyMessage,
+  notice,
+  isLoading = false,
+  isError = false,
+  error,
+  onRetry,
 }: BillboardPanelProps) {
   const [listOpen, setListOpen] = useState(true)
 
@@ -45,6 +57,7 @@ export function BillboardPanel({
               if (e.key === 'Enter') setListOpen(true)
             }}
             placeholder="Search billboards, city, category…"
+            aria-label="Search billboards"
             className="w-full border border-ink/10 bg-paper py-2.5 pr-3 pl-9 text-sm shadow-md placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/15 dark:bg-ink-soft dark:placeholder:text-paper/30"
           />
         </div>
@@ -56,9 +69,14 @@ export function BillboardPanel({
           className="relative shrink-0"
         >
           <LayoutList className="size-4" />
-          <span className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-accent font-mono text-[9px] text-paper">
-            {results.length}
-          </span>
+          {!isLoading && !isError && (
+            <span
+              aria-hidden="true"
+              className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-accent font-mono text-[9px] text-paper"
+            >
+              {results.length}
+            </span>
+          )}
         </MapIconButton>
       </div>
 
@@ -78,12 +96,25 @@ export function BillboardPanel({
 
       {listOpen && (
         <div className="pointer-events-auto flex max-h-[60svh] flex-col gap-2 overflow-y-auto border border-ink/10 bg-paper/95 p-3 shadow-lg backdrop-blur-sm dark:border-paper/10 dark:bg-ink/95">
-          {results.length === 0 ? (
-            <p className="py-8 text-center text-sm text-ink/40 dark:text-paper/40">
-              {emptyMessage}
+          {notice && !isLoading && !isError && (
+            <p
+              role="status"
+              className="font-mono text-[11px] text-ink/60 dark:text-paper/60"
+            >
+              {notice}
             </p>
-          ) : (
-            results.map((billboard) => (
+          )}
+          <ListState
+            isLoading={isLoading}
+            isError={isError}
+            error={error}
+            isEmpty={results.length === 0}
+            loadingText="Loading billboards…"
+            errorText="Couldn't load billboards."
+            emptyText={emptyMessage}
+            onRetry={onRetry}
+          >
+            {results.map((billboard) => (
               <BillboardCard
                 key={billboard.id}
                 billboard={billboard}
@@ -91,8 +122,8 @@ export function BillboardPanel({
                 onClick={() => onSelect(billboard.id)}
                 distanceKm={distanceById.get(billboard.id)}
               />
-            ))
-          )}
+            ))}
+          </ListState>
         </div>
       )}
     </div>

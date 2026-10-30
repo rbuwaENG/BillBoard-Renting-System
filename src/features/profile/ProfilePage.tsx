@@ -19,18 +19,32 @@ export function ProfilePage() {
   const [phone, setPhone] = useState(user?.phone ?? '')
   const [photoURL, setPhotoURL] = useState(user?.photoURL ?? '')
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   if (!user) return null
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    await updateProfile({
-      displayName: displayName.trim() || user!.displayName,
-      phone: phone.trim() || undefined,
-      photoURL: photoURL.trim() || undefined,
-    })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    setSaveError(null)
+    setSaving(true)
+    try {
+      await updateProfile({
+        displayName: displayName.trim() || user!.displayName,
+        phone: phone.trim() || undefined,
+        photoURL: photoURL.trim() || undefined,
+      })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      setSaveError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Couldn't save your changes. Please try again.",
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -111,9 +125,18 @@ export function ProfilePage() {
           </label>
 
           <div className="flex items-center gap-3">
-            <Button type="submit">Save changes</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Saving…' : 'Save changes'}
+            </Button>
             {saved && (
-              <span className="text-xs text-brand-success">Saved.</span>
+              <span role="status" className="text-xs text-brand-success">
+                Saved.
+              </span>
+            )}
+            {saveError && (
+              <span role="alert" className="text-xs text-brand-error">
+                {saveError}
+              </span>
             )}
           </div>
         </form>

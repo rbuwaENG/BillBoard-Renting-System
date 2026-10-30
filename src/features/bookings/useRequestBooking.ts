@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { invalidateBooking } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 
 interface RequestBookingInput {
@@ -22,8 +23,7 @@ export function useRequestBooking() {
       return data
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['my-bookings'] })
-      qc.invalidateQueries({ queryKey: ['owner-bookings'] })
+      invalidateBooking(qc)
     },
   })
 }
@@ -44,9 +44,8 @@ export function useAttachBookingCreative() {
       })
       if (error) throw error
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['my-bookings'] })
-      qc.invalidateQueries({ queryKey: ['owner-bookings'] })
+    onSuccess: (_data, vars) => {
+      invalidateBooking(qc, vars.bookingId)
     },
   })
 }

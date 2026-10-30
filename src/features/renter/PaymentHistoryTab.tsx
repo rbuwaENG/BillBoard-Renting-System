@@ -1,6 +1,14 @@
 import { Badge, Card } from '@/components'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
+import { ListState } from './ListState'
 import { useMyPayments } from './useMyPayments'
+
+const STATUS_LABEL: Record<string, string> = {
+  succeeded: 'Confirmed',
+  pending: 'Awaiting confirmation',
+  failed: 'Rejected',
+  refunded: 'Refunded',
+}
 
 const STATUS_CLASSES: Record<string, string> = {
   succeeded: 'border-brand-success/40 text-brand-success',
@@ -11,7 +19,7 @@ const STATUS_CLASSES: Record<string, string> = {
 
 export function PaymentHistoryTab() {
   const formatPrice = useFormatPrice()
-  const { data } = useMyPayments()
+  const { data, isLoading, isError, error, refetch } = useMyPayments()
   const payments = data ?? []
 
   const totalPaid = payments
@@ -25,15 +33,20 @@ export function PaymentHistoryTab() {
           Total paid
         </span>
         <p className="mt-1 font-display text-xl font-semibold text-accent">
-          {formatPrice(totalPaid)}
+          {isLoading ? '—' : formatPrice(totalPaid)}
         </p>
       </Card>
 
-      {payments.length === 0 ? (
-        <p className="py-8 text-center text-sm text-ink/40 dark:text-paper/40">
-          No payments yet — they'll show up here once a booking is confirmed.
-        </p>
-      ) : (
+      <ListState
+        isLoading={isLoading}
+        isError={isError}
+        error={error}
+        isEmpty={payments.length === 0}
+        loadingText="Loading payments…"
+        errorText="Couldn't load your payments."
+        emptyText="No payments yet — once an owner approves a booking, pay by bank transfer and tap “I’ve paid”. Your submissions show up here."
+        onRetry={() => refetch()}
+      >
         <div className="space-y-2">
           {payments.map((p) => (
             <div
@@ -46,14 +59,19 @@ export function PaymentHistoryTab() {
                     {p.billboardTitle}
                   </p>
                   <p className="mt-0.5 font-mono text-[11px] tracking-wide text-ink/50 uppercase dark:text-paper/50">
-                    {new Date(p.confirmedAt ?? p.createdAt).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
+                    {new Date(p.confirmedAt ?? p.createdAt).toLocaleDateString(
+                      'en-US',
+                      {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      },
+                    )}
                   </p>
                 </div>
-                <Badge className={STATUS_CLASSES[p.status]}>{p.status}</Badge>
+                <Badge className={STATUS_CLASSES[p.status]}>
+                  {STATUS_LABEL[p.status] ?? p.status}
+                </Badge>
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
                 <span className="font-mono text-sm font-semibold text-accent">
@@ -68,7 +86,7 @@ export function PaymentHistoryTab() {
             </div>
           ))}
         </div>
-      )}
+      </ListState>
     </div>
   )
 }

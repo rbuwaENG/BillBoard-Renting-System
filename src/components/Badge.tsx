@@ -10,7 +10,11 @@ const variantClasses: Record<NonNullable<BadgeProps['variant']>, string> = {
   neutral: 'border-ink/20 text-ink/60 dark:border-paper/20 dark:text-paper/60',
 }
 
-export function Badge({ variant = 'neutral', className, ...props }: BadgeProps) {
+export function Badge({
+  variant = 'neutral',
+  className,
+  ...props
+}: BadgeProps) {
   return (
     <span
       className={cn(

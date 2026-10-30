@@ -1,10 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import { BillboardMark, Button } from '@/components'
 import { supabase } from '@/lib/supabase'
 import type { UserRole } from '@/types'
+import { sanitizeNext } from './redirect'
 
 const ROLE_HOME: Record<UserRole, string> = {
   renter: '/',
@@ -13,7 +14,7 @@ const ROLE_HOME: Record<UserRole, string> = {
 }
 
 const loginSchema = z.object({
-  email: z.string().email('Enter a valid email address'),
+  email: z.email('Enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 })
 
@@ -21,6 +22,8 @@ type LoginFormValues = z.infer<typeof loginSchema>
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const next = sanitizeNext(searchParams.get('next'))
   const {
     register,
     handleSubmit,
@@ -37,14 +40,12 @@ export function LoginPage() {
 
     const userId = data.user?.id
     const { data: profile } = userId
-      ? await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', userId)
-          .single()
+      ? await supabase.from('profiles').select('role').eq('id', userId).single()
       : { data: null }
 
-    navigate(ROLE_HOME[(profile?.role as UserRole) ?? 'renter'])
+    navigate(next ?? ROLE_HOME[(profile?.role as UserRole) ?? 'renter'], {
+      replace: true,
+    })
   }
 
   return (
@@ -75,7 +76,9 @@ export function LoginPage() {
             Log in
           </h2>
           <p className="mt-1 text-sm text-ink/60 dark:text-paper/60">
-            Enter your details to continue.
+            {next
+              ? 'Log in to continue where you left off.'
+              : 'Enter your details to continue.'}
           </p>
 
           <div className="mt-8 space-y-5">
@@ -112,6 +115,14 @@ export function LoginPage() {
                 </span>
               )}
             </label>
+            <p className="-mt-3 text-right text-xs">
+              <Link
+                to="/forgot-password"
+                className="text-accent hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </p>
 
             {errors.root && (
               <span className="block text-xs text-brand-error">
@@ -126,7 +137,10 @@ export function LoginPage() {
 
           <p className="mt-6 text-center text-xs text-ink/50 dark:text-paper/50">
             No account?{' '}
-            <Link to="/signup" className="text-accent hover:underline">
+            <Link
+              to={next ? `/signup?next=${encodeURIComponent(next)}` : '/signup'}
+              className="text-accent hover:underline"
+            >
               Sign up
             </Link>
           </p>

@@ -9,22 +9,31 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      # Public anon key — safe to expose (protected by Row Level Security).
-      # Needed because src/lib/supabase.ts calls createClient() at import
-      # time, which throws if the URL/key are empty, even for tests that
-      # never make a network call.
-      VITE_SUPABASE_URL: https://rgdnbhrzhwgasthpuwmw.supabase.co
-      VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnZG5iaHJ6aHdnYXN0aHB1d213Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4MTMxNDAsImV4cCI6MjEwNzM4OTE0MH0.9lzqJ1OR8slHdKB0qOOddZ7GRnyW7mWiuFJ_Vw1G2Y0
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
       - run: npm run lint
+      - run: npx prettier --check .
+
+      # Unit tests mock @/lib/supabase globally (src/test/setup.ts), so they
+      # need no Supabase env and make no network calls.
       - run: npm run test
+
+      # Migrations applied to an in-process Postgres (PGlite).
+      - run: npm run test:db
+
+      # `build` runs `tsc -b` first, so this is also the typecheck.
       - run: npm run build
+        env:
+          # Set as repository variables (Settings -> Secrets and variables ->
+          # Actions -> Variables). The anon key is public by design (RLS
+          # protects the data). Without them the build still succeeds; the
+          # bundle just shows the configuration-error screen.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}

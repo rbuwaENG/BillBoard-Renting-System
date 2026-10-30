@@ -1,8 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { queryKeys } from '@/lib/queryKeys'
+import { uniqueChannelName } from '@/lib/realtime'
 import { supabase } from '@/lib/supabase'
 
-export type BookingEventType = 'status_change' | 'document_requested' | 'document_uploaded'
+export type BookingEventType =
+  'status_change' | 'document_requested' | 'document_uploaded' | 'proof_posted'
 
 export interface BookingEvent {
   id: string
@@ -48,7 +51,7 @@ export function useBookingEvents(bookingId: string | null | undefined) {
   useEffect(() => {
     if (!bookingId) return
     const channel = supabase
-      .channel(`booking-events:${bookingId}`)
+      .channel(uniqueChannelName(`booking-events:${bookingId}`))
       .on(
         'postgres_changes',
         {
@@ -57,7 +60,10 @@ export function useBookingEvents(bookingId: string | null | undefined) {
           table: 'booking_events',
           filter: `booking_id=eq.${bookingId}`,
         },
-        () => qc.invalidateQueries({ queryKey: ['booking-events', bookingId] }),
+        () =>
+          qc.invalidateQueries({
+            queryKey: queryKeys.bookingEvents(bookingId),
+          }),
       )
       .subscribe()
     return () => {
@@ -66,7 +72,7 @@ export function useBookingEvents(bookingId: string | null | undefined) {
   }, [bookingId, qc])
 
   return useQuery({
-    queryKey: ['booking-events', bookingId],
+    queryKey: queryKeys.bookingEvents(bookingId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('booking_events')

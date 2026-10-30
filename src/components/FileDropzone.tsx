@@ -8,6 +8,9 @@ interface FileDropzoneProps {
   multiple?: boolean
   disabled?: boolean
   hint?: string
+  // Per-file check (e.g. MIME type — `accept` isn't enforced on drop):
+  // return an error message to reject the selection, or null.
+  validate?: (file: File) => string | null
   onFilesSelected: (files: File[]) => void
   onError?: (message: string) => void
 }
@@ -18,6 +21,7 @@ export function FileDropzone({
   multiple = false,
   disabled = false,
   hint,
+  validate,
   onFilesSelected,
   onError,
 }: FileDropzoneProps) {
@@ -27,6 +31,15 @@ export function FileDropzone({
   function validateAndEmit(fileList: FileList | File[]) {
     const files = Array.from(fileList)
     if (files.length === 0) return
+    if (validate) {
+      for (const file of multiple ? files : [files[0]]) {
+        const message = validate(file)
+        if (message) {
+          onError?.(message)
+          return
+        }
+      }
+    }
     if (maxSizeBytes) {
       const oversized = files.find((f) => f.size > maxSizeBytes)
       if (oversized) {
@@ -75,7 +88,11 @@ export function FileDropzone({
       <p className="font-mono text-[11px] tracking-widest text-ink/60 uppercase dark:text-paper/60">
         Drag files here or click to browse
       </p>
-      {hint && <p className="font-mono text-[10px] text-ink/40 dark:text-paper/40">{hint}</p>}
+      {hint && (
+        <p className="font-mono text-[10px] text-ink/40 dark:text-paper/40">
+          {hint}
+        </p>
+      )}
       <input
         ref={inputRef}
         type="file"

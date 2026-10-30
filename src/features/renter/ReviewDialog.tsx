@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { Star, X } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
 import { Button } from '@/components'
 import { cn } from '@/lib/utils'
 import { useSubmitReview } from './useReviews'
@@ -18,15 +18,34 @@ export function ReviewDialog({
   open,
   onOpenChange,
 }: ReviewDialogProps) {
-  const [rating, setRating] = useState(5)
+  // No default — the renter has to pick a rating deliberately.
+  const [rating, setRating] = useState(0)
+  const starRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [comment, setComment] = useState('')
   const submitReview = useSubmitReview()
 
+  // Radio-group arrow-key behaviour: move + select.
+  function handleStarKey(e: KeyboardEvent<HTMLButtonElement>, n: number) {
+    let next: number | null = null
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = Math.min(5, n + 1)
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown')
+      next = Math.max(1, n - 1)
+    if (next === null) return
+    e.preventDefault()
+    setRating(next)
+    starRefs.current[next - 1]?.focus()
+  }
+
   async function handleSubmit() {
+    if (rating < 1) return
     try {
-      await submitReview.mutateAsync({ bookingId, rating, comment: comment.trim() || undefined })
+      await submitReview.mutateAsync({
+        bookingId,
+        rating,
+        comment: comment.trim() || undefined,
+      })
       setComment('')
-      setRating(5)
+      setRating(0)
       onOpenChange(false)
     } catch {
       // error surfaced via submitReview.error below
@@ -49,6 +68,7 @@ export function ReviewDialog({
               <button
                 type="button"
                 title="Close"
+                aria-label="Close"
                 className="shrink-0 text-ink/40 hover:text-ink dark:text-paper/40 dark:hover:text-paper"
               >
                 <X className="size-4" />
@@ -56,15 +76,29 @@ export function ReviewDialog({
             </Dialog.Close>
           </div>
 
-          <div className="mt-4 flex items-center gap-1">
+          <div
+            role="radiogroup"
+            aria-label="Rating"
+            className="mt-4 flex items-center gap-1"
+          >
             {[1, 2, 3, 4, 5].map((n) => (
               <button
                 key={n}
+                ref={(el) => {
+                  starRefs.current[n - 1] = el
+                }}
                 type="button"
+                role="radio"
+                aria-checked={rating === n}
+                aria-label={`${n} star${n > 1 ? 's' : ''}`}
+                tabIndex={rating === n || (rating === 0 && n === 1) ? 0 : -1}
                 onClick={() => setRating(n)}
+                onKeyDown={(e) => handleStarKey(e, n)}
                 title={`${n} star${n > 1 ? 's' : ''}`}
+                className="focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none"
               >
                 <Star
+                  aria-hidden="true"
                   className={cn(
                     'size-6',
                     n <= rating
@@ -74,6 +108,9 @@ export function ReviewDialog({
                 />
               </button>
             ))}
+            <span className="ml-2 font-mono text-[11px] text-ink/50 uppercase dark:text-paper/50">
+              {rating > 0 ? `${rating}/5` : 'Choose a rating'}
+            </span>
           </div>
 
           <textarea
@@ -92,7 +129,7 @@ export function ReviewDialog({
 
           <Button
             onClick={handleSubmit}
-            disabled={submitReview.isPending}
+            disabled={submitReview.isPending || rating < 1}
             className="mt-4 w-full"
           >
             {submitReview.isPending ? 'Submitting…' : 'Submit review'}

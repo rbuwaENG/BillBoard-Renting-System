@@ -1,5 +1,5 @@
-// Mirrors the Firestore schema in PLAN.md section 3. Kept minimal for the
-// scaffold phase; fields will grow as each feature phase lands.
+// Client-side (camelCase) domain types for the Supabase tables defined in
+// supabase/migrations. Hooks map snake_case rows into these shapes.
 
 export type UserRole = 'renter' | 'rentor' | 'admin'
 
@@ -14,7 +14,7 @@ export interface UserProfile {
   createdAt: string
 }
 
-export type BillboardStatus = 'active' | 'inactive' | 'flagged'
+export type BillboardStatus = 'active' | 'inactive' | 'flagged' | 'archived'
 
 export type TrafficLevel = 'light' | 'moderate' | 'heavy'
 
@@ -38,6 +38,8 @@ export interface Billboard {
   adminPriceOverridePerDay?: number | null
   images: string[]
   status: BillboardStatus
+  // Admin moderation lock (0035): only an admin can change the status.
+  statusLockedByAdmin?: boolean
   district?: string
   trafficLevel?: TrafficLevel
   rating: { avg: number; count: number }
@@ -62,6 +64,7 @@ export type BookingStatus =
   | 'active'
   | 'completed'
   | 'cancelled'
+  | 'expired'
 
 export interface Booking {
   id: string

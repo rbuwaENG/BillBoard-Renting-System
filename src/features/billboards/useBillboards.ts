@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { BillboardStatus, TrafficLevel } from '@/types'
 
@@ -6,8 +7,6 @@ export interface BillboardWithDetails {
   id: string
   ownerId: string
   ownerName: string
-  ownerPhone: string
-  ownerEmail: string
   title: string
   description: string
   category: string
@@ -18,6 +17,8 @@ export interface BillboardWithDetails {
   adminPriceOverridePerDay: number | null
   images: string[]
   status: BillboardStatus
+  // Admin moderation lock (0035): only an admin can change the status.
+  statusLockedByAdmin?: boolean
   district: string | null
   trafficLevel: TrafficLevel | null
   rating: { avg: number; count: number }
@@ -39,6 +40,7 @@ export interface BillboardRow {
   admin_price_override_per_day: number | null
   images: string[]
   status: BillboardStatus
+  status_locked_by_admin?: boolean | null
   district: string | null
   traffic_level: TrafficLevel | null
   rating_avg: number
@@ -47,7 +49,9 @@ export interface BillboardRow {
   updated_at: string
   categories: { name: string } | null
   sizes: { label: string } | null
-  profiles: { display_name: string; email: string; phone: string | null } | null
+  // Public profile columns only: email/phone are not readable (0030); the
+  // counterparty contact comes from the get_booking_contact RPC.
+  profiles: { display_name: string } | null
 }
 
 export function toBillboard(row: BillboardRow): BillboardWithDetails {
@@ -55,18 +59,22 @@ export function toBillboard(row: BillboardRow): BillboardWithDetails {
     id: row.id,
     ownerId: row.owner_id,
     ownerName: row.profiles?.display_name ?? 'Unknown owner',
-    ownerPhone: row.profiles?.phone ?? '',
-    ownerEmail: row.profiles?.email ?? '',
     title: row.title,
     description: row.description,
     category: row.categories?.name ?? 'Uncategorized',
     size: row.sizes?.label ?? '—',
-    location: { lat: row.lat, lng: row.lng, address: row.address, city: row.city },
+    location: {
+      lat: row.lat,
+      lng: row.lng,
+      address: row.address,
+      city: row.city,
+    },
     pricePerDay: row.price_per_day,
     salePricePerDay: row.sale_price_per_day,
     adminPriceOverridePerDay: row.admin_price_override_per_day,
     images: row.images,
     status: row.status,
+    statusLockedByAdmin: !!row.status_locked_by_admin,
     district: row.district,
     trafficLevel: row.traffic_level,
     rating: { avg: row.rating_avg, count: row.rating_count },
@@ -76,12 +84,12 @@ export function toBillboard(row: BillboardRow): BillboardWithDetails {
 }
 
 export const BILLBOARD_SELECT =
-  '*, categories(name), sizes(label), profiles(display_name, email, phone)'
+  '*, categories(name), sizes(label), profiles(display_name)'
 const SELECT = BILLBOARD_SELECT
 
 export function useBillboards() {
   return useQuery({
-    queryKey: ['billboards'],
+    queryKey: queryKeys.billboards,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('billboards')
@@ -100,7 +108,7 @@ export function useBillboardsNear(
   radiusKm: number,
 ) {
   return useQuery({
-    queryKey: ['billboards-near', lat, lng, radiusKm],
+    queryKey: queryKeys.billboardsNear(lat, lng, radiusKm),
     queryFn: async () => {
       const { data, error } = await supabase
         .rpc('billboards_near', {

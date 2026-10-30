@@ -1,6 +1,14 @@
 import { Plus, Tags, Trash2 } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { Button, Card } from '@/components'
+import {
+  ConfirmDialog,
+  EmptyState,
+  ErrorText,
+  FieldLabel,
+  QueryState,
+} from './AdminUi'
+import { ADMIN_INPUT_CLASSES } from './adminUtils'
 import {
   useAddCategory,
   useAddSize,
@@ -10,11 +18,13 @@ import {
   useSizes,
 } from './useTaxonomy'
 
+type PendingDelete = { kind: 'category' | 'size'; id: string; label: string }
+
 export function TaxonomyPanel() {
-  const { data: categoriesData } = useCategories()
-  const { data: sizesData } = useSizes()
-  const categories = categoriesData ?? []
-  const sizes = sizesData ?? []
+  const categoriesQuery = useCategories()
+  const sizesQuery = useSizes()
+  const categories = categoriesQuery.data ?? []
+  const sizes = sizesQuery.data ?? []
   const addCategory = useAddCategory()
   const removeCategory = useRemoveCategory()
   const addSize = useAddSize()
@@ -24,13 +34,17 @@ export function TaxonomyPanel() {
   const [sizeLabel, setSizeLabel] = useState('')
   const [sizeWidth, setSizeWidth] = useState('')
   const [sizeHeight, setSizeHeight] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null)
+  const categoryId = useId()
+  const sizeLabelId = useId()
+  const sizeWidthId = useId()
+  const sizeHeightId = useId()
 
   function handleAddCategory(e: FormEvent) {
     e.preventDefault()
     const name = categoryName.trim()
     if (!name) return
-    addCategory.mutate(name)
-    setCategoryName('')
+    addCategory.mutate(name, { onSuccess: () => setCategoryName('') })
   }
 
   function handleAddSize(e: FormEvent) {
@@ -38,34 +52,66 @@ export function TaxonomyPanel() {
     const label = sizeLabel.trim()
     const width = Number(sizeWidth)
     const height = Number(sizeHeight)
-    if (!label || !width || !height) return
-    addSize.mutate({ label, width, height })
-    setSizeLabel('')
-    setSizeWidth('')
-    setSizeHeight('')
+    if (!label || !(width > 0) || !(height > 0)) return
+    addSize.mutate(
+      { label, width, height },
+      {
+        onSuccess: () => {
+          setSizeLabel('')
+          setSizeWidth('')
+          setSizeHeight('')
+        },
+      },
+    )
   }
 
   return (
     <div className="grid gap-6 sm:grid-cols-2">
       <Card ticks className="p-5">
         <div className="flex items-center gap-2">
-          <Tags className="size-4 text-accent" />
+          <Tags aria-hidden="true" className="size-4 text-accent" />
           <h3 className="font-display text-lg font-semibold tracking-tight">
             Categories
           </h3>
         </div>
-        <form onSubmit={handleAddCategory} className="mt-4 flex gap-2">
-          <input
-            value={categoryName}
-            onChange={(e) => setCategoryName(e.target.value)}
-            placeholder="New category name"
-            className="w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30"
-          />
-          <Button type="submit" size="sm" variant="secondary">
-            <Plus className="size-3.5" />
+        <form
+          onSubmit={handleAddCategory}
+          className="mt-4 flex items-end gap-2"
+        >
+          <label htmlFor={categoryId} className="block w-full">
+            <FieldLabel>New category</FieldLabel>
+            <input
+              id={categoryId}
+              value={categoryName}
+              onChange={(e) => setCategoryName(e.target.value)}
+              placeholder="New category name"
+              className={ADMIN_INPUT_CLASSES}
+            />
+          </label>
+          <Button
+            type="submit"
+            size="sm"
+            variant="secondary"
+            disabled={!categoryName.trim() || addCategory.isPending}
+          >
+            <Plus aria-hidden="true" className="size-3.5" />
             Add
           </Button>
         </form>
+        <div className="mt-2">
+          <ErrorText error={addCategory.error} />
+        </div>
+        <QueryState
+          isLoading={categoriesQuery.isLoading}
+          error={categoriesQuery.error}
+          onRetry={() => categoriesQuery.refetch()}
+          label="Loading categories…"
+        />
+        {!categoriesQuery.isLoading &&
+          !categoriesQuery.error &&
+          categories.length === 0 && (
+            <EmptyState>No categories yet.</EmptyState>
+          )}
         <ul className="mt-4 space-y-1.5">
           {categories.map((c) => (
             <li
@@ -75,11 +121,18 @@ export function TaxonomyPanel() {
               {c.name}
               <button
                 type="button"
-                onClick={() => removeCategory.mutate(c.id)}
+                onClick={() =>
+                  setPendingDelete({
+                    kind: 'category',
+                    id: c.id,
+                    label: c.name,
+                  })
+                }
                 title="Remove category"
+                aria-label={`Remove category ${c.name}`}
                 className="text-ink/40 hover:text-brand-error dark:text-paper/40"
               >
-                <Trash2 className="size-3.5" />
+                <Trash2 aria-hidden="true" className="size-3.5" />
               </button>
             </li>
           ))}
@@ -88,41 +141,69 @@ export function TaxonomyPanel() {
 
       <Card ticks className="p-5">
         <div className="flex items-center gap-2">
-          <Tags className="size-4 text-accent" />
+          <Tags aria-hidden="true" className="size-4 text-accent" />
           <h3 className="font-display text-lg font-semibold tracking-tight">
             Sizes
           </h3>
         </div>
         <form onSubmit={handleAddSize} className="mt-4 space-y-2">
-          <input
-            value={sizeLabel}
-            onChange={(e) => setSizeLabel(e.target.value)}
-            placeholder="Label, e.g. LED 12 × 24 ft"
-            className="w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30"
-          />
-          <div className="flex gap-2">
+          <label htmlFor={sizeLabelId} className="block">
+            <FieldLabel>New size label</FieldLabel>
             <input
-              value={sizeWidth}
-              onChange={(e) => setSizeWidth(e.target.value)}
-              type="number"
-              min="1"
-              placeholder="Width (ft)"
-              className="w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30"
+              id={sizeLabelId}
+              value={sizeLabel}
+              onChange={(e) => setSizeLabel(e.target.value)}
+              placeholder="e.g. LED 12 × 24 ft"
+              className={ADMIN_INPUT_CLASSES}
             />
-            <input
-              value={sizeHeight}
-              onChange={(e) => setSizeHeight(e.target.value)}
-              type="number"
-              min="1"
-              placeholder="Height (ft)"
-              className="w-full border-b border-ink/20 bg-transparent py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30"
-            />
-            <Button type="submit" size="sm" variant="secondary" className="shrink-0">
-              <Plus className="size-3.5" />
+          </label>
+          <div className="flex items-end gap-2">
+            <label htmlFor={sizeWidthId} className="block w-full">
+              <FieldLabel>Width (ft)</FieldLabel>
+              <input
+                id={sizeWidthId}
+                value={sizeWidth}
+                onChange={(e) => setSizeWidth(e.target.value)}
+                type="number"
+                min="1"
+                className={ADMIN_INPUT_CLASSES}
+              />
+            </label>
+            <label htmlFor={sizeHeightId} className="block w-full">
+              <FieldLabel>Height (ft)</FieldLabel>
+              <input
+                id={sizeHeightId}
+                value={sizeHeight}
+                onChange={(e) => setSizeHeight(e.target.value)}
+                type="number"
+                min="1"
+                className={ADMIN_INPUT_CLASSES}
+              />
+            </label>
+            <Button
+              type="submit"
+              size="sm"
+              variant="secondary"
+              className="shrink-0"
+              disabled={addSize.isPending}
+            >
+              <Plus aria-hidden="true" className="size-3.5" />
               Add
             </Button>
           </div>
         </form>
+        <div className="mt-2">
+          <ErrorText error={addSize.error} />
+        </div>
+        <QueryState
+          isLoading={sizesQuery.isLoading}
+          error={sizesQuery.error}
+          onRetry={() => sizesQuery.refetch()}
+          label="Loading sizes…"
+        />
+        {!sizesQuery.isLoading && !sizesQuery.error && sizes.length === 0 && (
+          <EmptyState>No sizes yet.</EmptyState>
+        )}
         <ul className="mt-4 space-y-1.5">
           {sizes.map((sz) => (
             <li
@@ -132,16 +213,34 @@ export function TaxonomyPanel() {
               {sz.label}
               <button
                 type="button"
-                onClick={() => removeSize.mutate(sz.id)}
+                onClick={() =>
+                  setPendingDelete({ kind: 'size', id: sz.id, label: sz.label })
+                }
                 title="Remove size"
+                aria-label={`Remove size ${sz.label}`}
                 className="text-ink/40 hover:text-brand-error dark:text-paper/40"
               >
-                <Trash2 className="size-3.5" />
+                <Trash2 aria-hidden="true" className="size-3.5" />
               </button>
             </li>
           ))}
         </ul>
       </Card>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title={`Remove ${pendingDelete?.kind ?? ''} "${pendingDelete?.label ?? ''}"?`}
+        description="It can only be removed while no billboard uses it."
+        confirmLabel="Remove"
+        variant="danger"
+        onConfirm={() => {
+          if (!pendingDelete) return
+          return pendingDelete.kind === 'category'
+            ? removeCategory.mutateAsync(pendingDelete.id)
+            : removeSize.mutateAsync(pendingDelete.id)
+        }}
+      />
     </div>
   )
 }

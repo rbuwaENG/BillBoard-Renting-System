@@ -1,6 +1,6 @@
-import { Check, ChevronDown, ChevronUp, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { Button, Card } from '@/components'
+import { Camera, Check, ChevronDown, ChevronUp, Clock, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Badge, Button, Card } from '@/components'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
 import {
   BookingActivityHistory,
@@ -9,24 +9,43 @@ import {
   BookingTimeline,
   computeBookingTimeline,
   CreativeLink,
+  PROOF_UPLOAD_STATUSES,
+  ProofOfPostingUploader,
   useBookingEvents,
   useRequestBookingDocuments,
 } from '@/features/bookings'
+import { formatDateRange } from '@/features/renter/formatDateRange'
 import { useAuth } from '@/hooks/useAuth'
-import { useOwnerBookings, useRespondToBooking, type RentorBookingRequest } from './useRentorBookings'
+import { cn } from '@/lib/utils'
+import { errorMessage } from './errors'
+import { PanelError, PanelLoading } from './PanelState'
+import {
+  useOwnerBookings,
+  useRespondToBooking,
+  type RentorBookingRequest,
+} from './useRentorBookings'
 
-function formatDateRange(start: string, end: string) {
-  const s = new Date(start)
-  const e = new Date(end)
-  const short: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
-  return `${s.toLocaleDateString('en-US', short)} – ${e.toLocaleDateString('en-US', { ...short, year: 'numeric' })}`
-}
+const DOCUMENT_REQUESTABLE_STATUSES = new Set([
+  'pending_owner_review',
+  'payment_pending',
+])
 
-const DOCUMENT_REQUESTABLE_STATUSES = new Set(['pending_owner_review', 'payment_pending'])
-
-function BookingDetailsDisclosure({ request }: { request: RentorBookingRequest }) {
+function BookingDetailsDisclosure({
+  request,
+  forceOpen = false,
+}: {
+  request: RentorBookingRequest
+  // Opens the disclosure (e.g. when a notification link focuses this
+  // booking); the owner can still collapse it afterwards.
+  forceOpen?: boolean
+}) {
   const { user } = useAuth()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(forceOpen)
+  const [prevForceOpen, setPrevForceOpen] = useState(forceOpen)
+  if (forceOpen !== prevForceOpen) {
+    setPrevForceOpen(forceOpen)
+    if (forceOpen) setOpen(true)
+  }
   const [showRequestForm, setShowRequestForm] = useState(false)
   const [note, setNote] = useState('')
   const { data: eventsData } = useBookingEvents(open ? request.id : null)
@@ -54,7 +73,11 @@ function BookingDetailsDisclosure({ request }: { request: RentorBookingRequest }
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1.5 font-mono text-[11px] tracking-widest text-ink/50 uppercase hover:text-ink dark:text-paper/50 dark:hover:text-paper"
       >
-        {open ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+        {open ? (
+          <ChevronUp className="size-3.5" />
+        ) : (
+          <ChevronDown className="size-3.5" />
+        )}
         {open ? 'Hide timeline & documents' : 'View timeline & documents'}
       </button>
 
@@ -93,13 +116,21 @@ function BookingDetailsDisclosure({ request }: { request: RentorBookingRequest }
                   >
                     {requestDocuments.isPending ? 'Sending…' : 'Send'}
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setShowRequestForm(false)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowRequestForm(false)}
+                  >
                     Cancel
                   </Button>
                 </div>
               ) : (
                 <div className="mt-2">
-                  <Button size="sm" variant="secondary" onClick={() => setShowRequestForm(true)}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setShowRequestForm(true)}
+                  >
                     Request documents
                   </Button>
                 </div>
@@ -117,7 +148,11 @@ function BookingDetailsDisclosure({ request }: { request: RentorBookingRequest }
               Documents
             </span>
             <div className="mt-2">
-              <BookingDocuments bookingId={request.id} canUpload={false} canRemove={() => false} />
+              <BookingDocuments
+                bookingId={request.id}
+                canUpload={false}
+                canRemove={() => false}
+              />
             </div>
           </div>
 
@@ -133,116 +168,431 @@ function BookingDetailsDisclosure({ request }: { request: RentorBookingRequest }
   )
 }
 
-export function BookingInboxPanel() {
+// Contract 7: once a booking is paid, the owner shares photos of the
+// installed creative. The renter sees them in the timeline's "Posted" step.
+function ProofOfPostingAction({ bookingId }: { bookingId: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mt-3 border-t border-dashed border-ink/15 pt-3 dark:border-paper/15">
+      <Button
+        size="sm"
+        variant={open ? 'ghost' : 'secondary'}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Camera className="size-3.5" />
+        {open ? 'Close proof of posting' : 'Upload proof of posting'}
+      </Button>
+      {open && (
+        <div className="mt-3">
+          <ProofOfPostingUploader bookingId={bookingId} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Requests the owner hasn't answered expire 72h after creation (contract 3).
+const RESPONSE_WINDOW_MS = 72 * 60 * 60 * 1000
+
+const QUICK_REJECT_REASONS = [
+  'Dates unavailable',
+  'Creative doesn’t meet our content guidelines',
+  'Billboard under maintenance',
+]
+
+// `'expired'` (contract 3) may not be in the shared BookingStatus type or the
+// shared badge yet, so the inbox labels it itself.
+type InboxStatus = RentorBookingRequest['status'] | 'expired'
+
+const STATUS_FILTERS: { value: 'all' | InboxStatus; label: string }[] = [
+  { value: 'all', label: 'All statuses' },
+  { value: 'pending_owner_review', label: 'Pending review' },
+  { value: 'payment_pending', label: 'Payment pending' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'active', label: 'Active' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'expired', label: 'Expired' },
+]
+
+function InboxStatusBadge({ status }: { status: InboxStatus }) {
+  if (status === 'expired') {
+    return (
+      <Badge className="border-ink/15 text-ink/40 dark:border-paper/15 dark:text-paper/40">
+        Expired
+      </Badge>
+    )
+  }
+  return <BookingStatusBadge status={status} />
+}
+
+function respondByHint(createdAt: string, now: number) {
+  const deadline = new Date(createdAt).getTime() + RESPONSE_WINDOW_MS
+  if (Number.isNaN(deadline)) return null
+  if (deadline <= now) {
+    return {
+      overdue: true,
+      text: 'Response window passed — this request will expire shortly',
+    }
+  }
+  const formatted = new Date(deadline).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+  const hoursLeft = Math.floor((deadline - now) / (60 * 60 * 1000))
+  return {
+    overdue: false,
+    urgent: hoursLeft < 24,
+    text: `Respond by ${formatted}${hoursLeft < 24 ? ` (${hoursLeft < 1 ? 'under 1' : hoursLeft}h left)` : ''}`,
+  }
+}
+
+// Pending requests first (oldest first — they expire soonest), then
+// everything else newest first.
+function sortInboxRequests(requests: RentorBookingRequest[]) {
+  return [...requests].sort((a, b) => {
+    const aPending = a.status === 'pending_owner_review'
+    const bPending = b.status === 'pending_owner_review'
+    if (aPending !== bPending) return aPending ? -1 : 1
+    return aPending
+      ? a.createdAt.localeCompare(b.createdAt)
+      : b.createdAt.localeCompare(a.createdAt)
+  })
+}
+
+function inboxCardId(bookingId: string) {
+  return `inbox-booking-${bookingId}`
+}
+
+export function BookingInboxPanel({
+  focusBookingId = null,
+}: {
+  // From a notification link (`/rentor?booking=<id>`): scrolled to,
+  // highlighted and expanded.
+  focusBookingId?: string | null
+} = {}) {
   const formatPrice = useFormatPrice()
-  const { data } = useOwnerBookings()
-  const requests = data ?? []
+  const { data, isLoading, isError, error, refetch } = useOwnerBookings()
+  const requests = useMemo(() => data ?? [], [data])
   const respondToBooking = useRespondToBooking()
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [reason, setReason] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | InboxStatus>('all')
+  const [billboardFilter, setBillboardFilter] = useState('all')
+  // Captured once per mount; good enough for an "hours left" hint.
+  const [now] = useState(() => Date.now())
 
-  const sorted = [...requests].sort((a, b) =>
-    b.createdAt.localeCompare(a.createdAt),
+  // A newly focused booking must be visible: drop any filters hiding it.
+  const [prevFocusId, setPrevFocusId] = useState<string | null>(null)
+  if (focusBookingId !== prevFocusId) {
+    setPrevFocusId(focusBookingId)
+    if (focusBookingId) {
+      setStatusFilter('all')
+      setBillboardFilter('all')
+    }
+  }
+  const focusFound =
+    !!focusBookingId && requests.some((r) => r.id === focusBookingId)
+
+  useEffect(() => {
+    if (!focusFound || !focusBookingId) return
+    document
+      .getElementById(inboxCardId(focusBookingId))
+      // Not implemented by jsdom (tests) — hence the optional call.
+      ?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+  }, [focusFound, focusBookingId])
+
+  const billboardOptions = useMemo(() => {
+    const byId = new Map<string, string>()
+    for (const r of requests) byId.set(r.billboardId, r.billboardTitle)
+    return Array.from(byId, ([id, title]) => ({ id, title })).sort((a, b) =>
+      a.title.localeCompare(b.title),
+    )
+  }, [requests])
+
+  const visible = useMemo(
+    () =>
+      sortInboxRequests(
+        requests.filter(
+          (r) =>
+            (statusFilter === 'all' || r.status === statusFilter) &&
+            (billboardFilter === 'all' || r.billboardId === billboardFilter),
+        ),
+      ),
+    [requests, statusFilter, billboardFilter],
   )
 
-  function confirmReject(id: string) {
-    respondToBooking.mutate({
-      bookingId: id,
-      approve: false,
-      reason: reason.trim() || 'No reason given.',
-    })
-    setRejectingId(null)
-    setReason('')
+  const pendingId = respondToBooking.isPending
+    ? respondToBooking.variables?.bookingId
+    : undefined
+  const failedId = respondToBooking.isError
+    ? respondToBooking.variables?.bookingId
+    : undefined
+
+  function approve(id: string) {
+    if (respondToBooking.isPending) return
+    respondToBooking.mutate({ bookingId: id, approve: true })
   }
+
+  function confirmReject(id: string) {
+    const trimmed = reason.trim()
+    if (!trimmed || respondToBooking.isPending) return
+    respondToBooking.mutate(
+      { bookingId: id, approve: false, reason: trimmed },
+      {
+        onSuccess: () => {
+          setRejectingId(null)
+          setReason('')
+        },
+      },
+    )
+  }
+
+  if (isLoading) return <PanelLoading label="Loading booking requests…" />
+  if (isError) {
+    return (
+      <PanelError
+        error={error}
+        onRetry={() => refetch()}
+        label="Couldn't load your booking requests."
+      />
+    )
+  }
+
+  const filtersActive = statusFilter !== 'all' || billboardFilter !== 'all'
+  const selectClass =
+    'border-b border-ink/20 bg-transparent py-1.5 text-xs focus:border-accent focus:outline-none dark:border-paper/20'
 
   return (
     <div className="space-y-3">
-      {sorted.length === 0 && (
+      {requests.length > 0 && (
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="block">
+            <span className="mb-1 block font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
+              Status
+            </span>
+            <select
+              value={statusFilter}
+              onChange={(e) =>
+                setStatusFilter(e.target.value as 'all' | InboxStatus)
+              }
+              className={selectClass}
+            >
+              {STATUS_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {billboardOptions.length > 1 && (
+            <label className="block">
+              <span className="mb-1 block font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
+                Billboard
+              </span>
+              <select
+                value={billboardFilter}
+                onChange={(e) => setBillboardFilter(e.target.value)}
+                className={cn(selectClass, 'max-w-[14rem]')}
+              >
+                <option value="all">All billboards</option>
+                {billboardOptions.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {filtersActive && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setStatusFilter('all')
+                setBillboardFilter('all')
+              }}
+            >
+              Clear filters
+            </Button>
+          )}
+        </div>
+      )}
+
+      {requests.length === 0 ? (
         <p className="py-10 text-center text-sm text-ink/40 dark:text-paper/40">
           No booking requests yet.
         </p>
-      )}
+      ) : visible.length === 0 ? (
+        <p className="py-10 text-center text-sm text-ink/40 dark:text-paper/40">
+          No booking requests match these filters.
+        </p>
+      ) : null}
 
-      {sorted.map((r) => (
-        <Card key={r.id} className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate font-display text-sm font-semibold tracking-tight">
-                {r.billboardTitle}
-              </p>
-              <p className="mt-0.5 font-mono text-[11px] tracking-wide text-ink/50 uppercase dark:text-paper/50">
-                {r.renterName} · {formatDateRange(r.startDate, r.endDate)}
-              </p>
+      {visible.map((r) => {
+        const status = r.status as InboxStatus
+        const isPendingReview = status === 'pending_owner_review'
+        const responding = pendingId === r.id
+        const respondError =
+          failedId === r.id ? errorMessage(respondToBooking.error) : null
+        const hint = isPendingReview ? respondByHint(r.createdAt, now) : null
+        const focused = r.id === focusBookingId
+        return (
+          <Card
+            key={r.id}
+            id={inboxCardId(r.id)}
+            aria-current={focused ? 'true' : undefined}
+            className={cn(
+              'scroll-mt-24 p-4',
+              isPendingReview && 'border-accent/40',
+              focused && 'ring-2 ring-accent',
+            )}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate font-display text-sm font-semibold tracking-tight">
+                  {r.billboardTitle}
+                </p>
+                <p className="mt-0.5 font-mono text-[11px] tracking-wide text-ink/50 uppercase dark:text-paper/50">
+                  {r.renterName} · {formatDateRange(r.startDate, r.endDate)}
+                </p>
+              </div>
+              <InboxStatusBadge status={status} />
             </div>
-            <BookingStatusBadge status={r.status} />
-          </div>
 
-          {r.status === 'rejected' && r.rejectionReason && (
-            <p className="mt-2 text-xs text-ink/50 italic dark:text-paper/50">
-              Reason: {r.rejectionReason}
-            </p>
-          )}
-
-          {r.creativeUrl && <CreativeLink path={r.creativeUrl} />}
-
-          <div className="mt-3 flex items-center justify-between gap-2">
-            <span className="font-mono text-sm font-semibold text-accent">
-              {formatPrice(r.priceQuoted)}
-            </span>
-
-            {r.status === 'pending_owner_review' && (
-              <div className="flex gap-2">
-                {rejectingId === r.id ? (
-                  <>
-                    <input
-                      autoFocus
-                      value={reason}
-                      onChange={(e) => setReason(e.target.value)}
-                      placeholder="Reason for rejecting"
-                      className="w-48 border-b border-ink/20 bg-transparent py-1 text-xs placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30"
-                    />
-                    <Button size="sm" variant="danger" onClick={() => confirmReject(r.id)}>
-                      Confirm
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setRejectingId(null)
-                        setReason('')
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        respondToBooking.mutate({ bookingId: r.id, approve: true })
-                      }
-                    >
-                      <Check className="size-3.5" />
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() => setRejectingId(r.id)}
-                    >
-                      <X className="size-3.5" />
-                      Reject
-                    </Button>
-                  </>
+            {hint && (
+              <p
+                className={cn(
+                  'mt-2 flex items-center gap-1.5 font-mono text-[11px] tracking-wide',
+                  hint.overdue || hint.urgent
+                    ? 'text-brand-error'
+                    : 'text-ink/50 dark:text-paper/50',
                 )}
+              >
+                <Clock className="size-3.5 shrink-0" />
+                {hint.text}
+              </p>
+            )}
+
+            {status === 'expired' && (
+              <p className="mt-2 text-xs text-ink/50 italic dark:text-paper/50">
+                This request expired before it was answered or paid for.
+              </p>
+            )}
+
+            {status === 'rejected' && r.rejectionReason && (
+              <p className="mt-2 text-xs text-ink/50 italic dark:text-paper/50">
+                Reason: {r.rejectionReason}
+              </p>
+            )}
+
+            {r.creativeUrl && <CreativeLink path={r.creativeUrl} />}
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <span className="font-mono text-sm font-semibold text-accent">
+                {formatPrice(r.priceQuoted)}
+              </span>
+
+              {isPendingReview && rejectingId !== r.id && (
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={respondToBooking.isPending}
+                    onClick={() => approve(r.id)}
+                  >
+                    <Check className="size-3.5" />
+                    {responding ? 'Approving…' : 'Approve'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    disabled={respondToBooking.isPending}
+                    onClick={() => {
+                      setRejectingId(r.id)
+                      setReason('')
+                    }}
+                  >
+                    <X className="size-3.5" />
+                    Reject
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {isPendingReview && rejectingId === r.id && (
+              <div className="mt-3 border-t border-dashed border-ink/15 pt-3 dark:border-paper/15">
+                <label className="block">
+                  <span className="mb-1 block font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
+                    Reason (shared with the renter)
+                  </span>
+                  <input
+                    autoFocus
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        confirmReject(r.id)
+                      }
+                    }}
+                    placeholder="Reason for rejecting"
+                    className="w-full border-b border-ink/20 bg-transparent py-1 text-xs placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20 dark:placeholder:text-paper/30"
+                  />
+                </label>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {QUICK_REJECT_REASONS.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => setReason(q)}
+                      className="border border-ink/15 px-2 py-0.5 text-[11px] text-ink/60 hover:border-accent hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none dark:border-paper/15 dark:text-paper/60 dark:hover:text-paper"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={responding}
+                    onClick={() => {
+                      setRejectingId(null)
+                      setReason('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    disabled={!reason.trim() || respondToBooking.isPending}
+                    onClick={() => confirmReject(r.id)}
+                  >
+                    {responding ? 'Rejecting…' : 'Confirm reject'}
+                  </Button>
+                </div>
               </div>
             )}
-          </div>
 
-          <BookingDetailsDisclosure request={r} />
-        </Card>
-      ))}
+            {respondError && (
+              <p role="alert" className="mt-2 text-xs text-brand-error">
+                Couldn't update this request: {respondError}
+              </p>
+            )}
+
+            {PROOF_UPLOAD_STATUSES.has(status) && (
+              <ProofOfPostingAction bookingId={r.id} />
+            )}
+
+            <BookingDetailsDisclosure request={r} forceOpen={focused} />
+          </Card>
+        )
+      })}
     </div>
   )
 }

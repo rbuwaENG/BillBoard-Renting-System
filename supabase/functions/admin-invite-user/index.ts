@@ -2,7 +2,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type',
 }
 
 function json(body: unknown, status = 200) {
@@ -39,10 +40,12 @@ Deno.serve(async (req) => {
 
   const { data: callerProfile } = await callerClient
     .from('profiles')
-    .select('role')
+    .select('role, status')
     .eq('id', caller.id)
     .single()
-  if (callerProfile?.role !== 'admin') {
+  // A suspended admin keeps role = 'admin' but must lose admin powers
+  // (matches public.is_admin(), 0034).
+  if (callerProfile?.role !== 'admin' || callerProfile?.status !== 'active') {
     return json({ error: 'Only an admin can invite new admins' }, 403)
   }
 

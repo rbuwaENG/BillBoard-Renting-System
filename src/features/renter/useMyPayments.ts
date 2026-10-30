@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
+import { queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 
 export interface MyPayment {
@@ -43,11 +44,11 @@ function toMyPayment(row: PaymentRow): MyPayment {
 export function useMyPayments() {
   const { user } = useAuth()
   return useQuery({
-    queryKey: ['my-payments', user?.uid],
+    queryKey: queryKeys.myPayments(user?.uid),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('payments')
-        .select('*, bookings(billboards(title))')
+        .select('*, bookings!payments_booking_id_fkey(billboards(title))')
         .eq('renter_id', user!.uid)
         .order('created_at', { ascending: false })
       if (error) throw error

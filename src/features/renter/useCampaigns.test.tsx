@@ -19,7 +19,10 @@ function wrapper({ children }: { children: ReactNode }) {
 
 describe('useCreateCampaign', () => {
   it('calls create_campaign with the draft billboard ids', async () => {
-    vi.mocked(supabase.rpc).mockResolvedValueOnce({ data: { id: 'campaign-1' }, error: null } as never)
+    vi.mocked(supabase.rpc).mockResolvedValueOnce({
+      data: { id: 'campaign-1' },
+      error: null,
+    } as never)
 
     const { result } = renderHook(() => useCreateCampaign(), { wrapper })
     result.current.mutate({

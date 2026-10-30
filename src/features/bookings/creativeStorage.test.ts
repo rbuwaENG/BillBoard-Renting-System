@@ -56,7 +56,9 @@ describe('getCreativeKind', () => {
 describe('getCreativeFilename', () => {
   it('strips the uuid prefix without cutting into the uuid itself', () => {
     expect(
-      getCreativeFilename('booking-1/3fa85f64-5717-4562-b3fc-2c963f66afa6-my-ad.png'),
+      getCreativeFilename(
+        'booking-1/3fa85f64-5717-4562-b3fc-2c963f66afa6-my-ad.png',
+      ),
     ).toBe('my-ad.png')
   })
 

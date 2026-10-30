@@ -3,7 +3,10 @@ import { ExternalLink, LocateFixed, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Button } from '@/components'
 import { useCategories, useSizes } from '@/features/admin/useTaxonomy'
-import { useCurrencySetting } from '@/features/admin/useCurrencySetting'
+import {
+  useCurrencySetting,
+  useFormatPrice,
+} from '@/features/admin/useCurrencySetting'
 import {
   usePricingTiers,
   useSavePricingTiers,
@@ -12,9 +15,21 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import { lookupDistrict, trafficMapUrl } from '@/lib/geocode'
 import type { TrafficLevel } from '@/types'
+import { BillboardImageManager } from './BillboardImageManager'
+import { errorMessage } from './errors'
+import {
+  markUploaded,
+  storedItems,
+  useRevokeRemovedPreviews,
+  type ImageItem,
+} from './imageManager'
 import { LocationPickerMap } from './LocationPickerMap'
+import { validatePricingTiers } from './pricingTierValidation'
 import { uploadBillboardImages } from './useRentorBillboards'
-import type { RentorBillboard, RentorBillboardInput } from './useRentorBillboards'
+import type {
+  RentorBillboard,
+  RentorBillboardInput,
+} from './useRentorBillboards'
 
 const TRAFFIC_LEVELS: { value: TrafficLevel; label: string }[] = [
   { value: 'light', label: 'Light' },
@@ -26,7 +41,9 @@ interface BillboardFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   editing: RentorBillboard | null
-  onSubmit: (input: RentorBillboardInput) => void
+  // Resolves once the listing is saved; rejecting keeps the dialog open and
+  // shows the error inline.
+  onSubmit: (input: RentorBillboardInput) => Promise<unknown>
 }
 
 // Default map center for a brand-new listing — Colombo — until the owner
@@ -62,26 +79,51 @@ function inputClass() {
 // meaningful once the billboard exists, same constraint as the booking
 // creative upload needing a booking id first (src/features/billboards/BillboardDetailDialog.tsx).
 function PricingTiersEditor({ billboardId }: { billboardId: string }) {
-  const { data } = usePricingTiers(billboardId)
+  const { data, isLoading, isError, error, refetch } =
+    usePricingTiers(billboardId)
   const saveTiers = useSavePricingTiers(billboardId)
   const [rows, setRows] = useState<PricingTierInput[] | null>(null)
+  const [savedNotice, setSavedNotice] = useState(false)
 
-  const tiers = rows ?? (data ?? []).map((t) => ({
-    minDays: t.minDays,
-    maxDays: t.maxDays,
-    pricePerDay: t.pricePerDay,
-  }))
+  const tiers =
+    rows ??
+    (data ?? []).map((t) => ({
+      id: t.id,
+      minDays: t.minDays,
+      maxDays: t.maxDays,
+      pricePerDay: t.pricePerDay,
+    }))
+  const validationError = validatePricingTiers(tiers)
+
+  function edit(next: PricingTierInput[]) {
+    setRows(next)
+    setSavedNotice(false)
+  }
 
   function updateRow(index: number, patch: Partial<PricingTierInput>) {
-    setRows(tiers.map((r, i) => (i === index ? { ...r, ...patch } : r)))
+    edit(tiers.map((r, i) => (i === index ? { ...r, ...patch } : r)))
   }
 
   function addRow() {
-    setRows([...tiers, { minDays: 1, maxDays: null, pricePerDay: 0 }])
+    // Client-generated id so a retried save upserts instead of duplicating.
+    edit([
+      ...tiers,
+      { id: crypto.randomUUID(), minDays: 1, maxDays: null, pricePerDay: 0 },
+    ])
   }
 
   function removeRow(index: number) {
-    setRows(tiers.filter((_, i) => i !== index))
+    edit(tiers.filter((_, i) => i !== index))
+  }
+
+  function save() {
+    if (validationError || saveTiers.isPending) return
+    saveTiers.mutate(tiers, {
+      onSuccess: () => {
+        setRows(null)
+        setSavedNotice(true)
+      },
+    })
   }
 
   return (
@@ -91,7 +133,8 @@ function PricingTiersEditor({ billboardId }: { billboardId: string }) {
         <button
           type="button"
           onClick={addRow}
-          className="flex items-center gap-1 font-mono text-[11px] tracking-widest text-accent uppercase hover:underline"
+          disabled={isLoading || isError}
+          className="flex items-center gap-1 font-mono text-[11px] tracking-widest text-accent uppercase hover:underline disabled:opacity-40"
         >
           <Plus className="size-3" />
           Add tier
@@ -102,20 +145,35 @@ function PricingTiersEditor({ billboardId }: { billboardId: string }) {
         picks the matching tier automatically.
       </p>
 
-      {tiers.length === 0 ? (
+      {isLoading ? (
+        <p role="status" className="text-xs text-ink/40 dark:text-paper/40">
+          Loading packages…
+        </p>
+      ) : isError ? (
+        <p role="alert" className="text-xs text-brand-error">
+          Couldn't load pricing packages: {errorMessage(error)}{' '}
+          <button type="button" onClick={() => refetch()} className="underline">
+            Retry
+          </button>
+        </p>
+      ) : tiers.length === 0 ? (
         <p className="text-xs text-ink/40 dark:text-paper/40">
           No pricing tiers yet — bookings use the regular/sale price.
         </p>
       ) : (
         <div className="space-y-2">
           {tiers.map((row, i) => (
-            <div key={i} className="flex items-center gap-2">
+            <div key={row.id ?? i} className="flex items-center gap-2">
               <input
                 type="number"
                 min="1"
+                step="1"
                 value={row.minDays}
-                onChange={(e) => updateRow(i, { minDays: Number(e.target.value) })}
+                onChange={(e) =>
+                  updateRow(i, { minDays: Number(e.target.value) })
+                }
                 placeholder="Min days"
+                aria-label={`Tier ${i + 1} minimum days`}
                 title="Minimum days"
                 className="w-20 border-b border-ink/20 bg-transparent py-1.5 text-xs focus:border-accent focus:outline-none dark:border-paper/20"
               />
@@ -123,6 +181,7 @@ function PricingTiersEditor({ billboardId }: { billboardId: string }) {
               <input
                 type="number"
                 min={row.minDays}
+                step="1"
                 value={row.maxDays ?? ''}
                 onChange={(e) =>
                   updateRow(i, {
@@ -130,24 +189,29 @@ function PricingTiersEditor({ billboardId }: { billboardId: string }) {
                   })
                 }
                 placeholder="∞"
+                aria-label={`Tier ${i + 1} maximum days (blank = unlimited)`}
                 title="Maximum days (blank = unlimited)"
                 className="w-20 border-b border-ink/20 bg-transparent py-1.5 text-xs placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20"
               />
-              <span className="text-xs text-ink/40 dark:text-paper/40">days @</span>
+              <span className="text-xs text-ink/40 dark:text-paper/40">
+                days @
+              </span>
               <input
                 type="number"
-                min="0"
+                min="1"
                 value={row.pricePerDay || ''}
                 onChange={(e) =>
                   updateRow(i, { pricePerDay: Number(e.target.value) })
                 }
                 placeholder="Price/day"
+                aria-label={`Tier ${i + 1} price per day`}
                 className="flex-1 border-b border-ink/20 bg-transparent py-1.5 text-xs placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/20"
               />
               <button
                 type="button"
                 onClick={() => removeRow(i)}
                 title="Remove tier"
+                aria-label={`Remove tier ${i + 1}`}
                 className="shrink-0 text-ink/40 hover:text-brand-error dark:text-paper/40"
               >
                 <Trash2 className="size-3.5" />
@@ -157,9 +221,19 @@ function PricingTiersEditor({ billboardId }: { billboardId: string }) {
         </div>
       )}
 
+      {rows !== null && validationError && (
+        <p role="alert" className="mt-2 text-xs text-brand-error">
+          {validationError}
+        </p>
+      )}
       {saveTiers.isError && (
-        <p className="mt-2 text-xs text-brand-error">
-          {(saveTiers.error as Error).message}
+        <p role="alert" className="mt-2 text-xs text-brand-error">
+          Couldn't save packages: {errorMessage(saveTiers.error)}
+        </p>
+      )}
+      {savedNotice && rows === null && (
+        <p role="status" className="mt-2 text-xs text-brand-success">
+          Packages saved.
         </p>
       )}
 
@@ -168,8 +242,8 @@ function PricingTiersEditor({ billboardId }: { billboardId: string }) {
         size="sm"
         variant="secondary"
         className="mt-2"
-        disabled={saveTiers.isPending}
-        onClick={() => saveTiers.mutate(tiers)}
+        disabled={rows === null || !!validationError || saveTiers.isPending}
+        onClick={save}
       >
         {saveTiers.isPending ? 'Saving…' : 'Save packages'}
       </Button>
@@ -187,10 +261,24 @@ export function BillboardFormDialog({
   const { data: categories } = useCategories()
   const { data: sizes } = useSizes()
   const { data: currencySetting } = useCurrencySetting()
+  const formatPrice = useFormatPrice()
   const [form, setForm] = useState<RentorBillboardInput>(EMPTY)
-  const [newFiles, setNewFiles] = useState<File[]>([])
+  // The listing's ordered photos (first = cover); the source of truth for
+  // `images` on save. New files are uploaded on submit and swapped in place
+  // for their URLs, so a failed save retries without re-uploading.
+  const [imageItems, setImageItems] = useState<ImageItem[]>([])
+  useRevokeRemovedPreviews(imageItems)
+
+  // Kept apart from the form reset below so a taxonomy refetch can't wipe
+  // freshly picked photos. Closing drops (and revokes) unsaved previews.
+  useEffect(() => {
+    setImageItems(open ? storedItems(editing?.images ?? []) : [])
+  }, [open, editing])
   const [recenterSignal, setRecenterSignal] = useState(0)
   const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const busy = uploading || saving
   const [districtStatus, setDistrictStatus] = useState<
     'idle' | 'loading' | 'done'
   >('idle')
@@ -198,7 +286,7 @@ export function BillboardFormDialog({
 
   useEffect(() => {
     if (!open) return
-    setNewFiles([])
+    setSubmitError(null)
     if (editing) {
       setForm({
         title: editing.title,
@@ -259,33 +347,77 @@ export function BillboardFormDialog({
   }
 
   const salePriceError =
-    form.salePricePerDay !== null && form.salePricePerDay >= form.pricePerDay
-      ? 'Sale price must be lower than the regular price'
+    form.salePricePerDay === null
+      ? null
+      : !(form.salePricePerDay > 0)
+        ? 'Sale price must be greater than 0'
+        : form.salePricePerDay >= form.pricePerDay
+          ? 'Sale price must be lower than the regular price'
+          : null
+
+  const priceError =
+    form.pricePerDay !== 0 && !(form.pricePerDay > 0)
+      ? 'Price per day must be greater than 0'
       : null
+
+  function handleOpenChange(next: boolean) {
+    // Keep the dialog open while an upload or save is in flight so the
+    // owner sees the outcome (and any error) of what they submitted.
+    if (!next && busy) return
+    onOpenChange(next)
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!form.title.trim() || !form.city.trim() || !form.pricePerDay) return
-    if (!form.categoryId || !form.sizeId || !user) return
-    if (salePriceError) return
+    if (busy) return
+    setSubmitError(null)
+    if (!form.title.trim() || !form.city.trim()) return
+    if (!(form.pricePerDay > 0)) {
+      setSubmitError('Price per day must be greater than 0')
+      return
+    }
+    if (!form.categoryId || !form.sizeId) {
+      setSubmitError('Choose a category and a size')
+      return
+    }
+    if (!user || salePriceError) return
 
-    let images = form.images
-    if (newFiles.length > 0) {
+    let items = imageItems
+    const pending = items.filter((i) => i.kind === 'new')
+    if (pending.length > 0) {
       setUploading(true)
       try {
-        const uploaded = await uploadBillboardImages(newFiles, user.uid)
-        images = [...form.images, ...uploaded]
+        // One at a time, swapping each into place as soon as it's stored:
+        // the uploaded URLs are kept even if a later upload or the save
+        // fails, so a retry doesn't upload the same files again.
+        for (const item of pending) {
+          const [url] = await uploadBillboardImages([item.file], user.uid)
+          items = markUploaded(items, item.key, url)
+          // Functional update so edits made meanwhile (reorder/remove) win.
+          setImageItems((current) => markUploaded(current, item.key, url))
+        }
+      } catch (err) {
+        setSubmitError(`Image upload failed: ${errorMessage(err)}`)
+        return
       } finally {
         setUploading(false)
       }
     }
+    const images = items.flatMap((i) => (i.kind === 'stored' ? [i.url] : []))
 
-    onSubmit({ ...form, images })
-    onOpenChange(false)
+    setSaving(true)
+    try {
+      await onSubmit({ ...form, images })
+      onOpenChange(false)
+    } catch (err) {
+      setSubmitError(`Couldn't save this listing: ${errorMessage(err)}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[1900] bg-ink/50 backdrop-blur-[2px] dark:bg-ink/70" />
         <Dialog.Content
@@ -301,6 +433,8 @@ export function BillboardFormDialog({
                 <button
                   type="button"
                   title="Close"
+                  aria-label="Close"
+                  disabled={busy}
                   className="text-ink/40 hover:text-ink dark:text-paper/40 dark:hover:text-paper"
                 >
                   <X className="size-5" />
@@ -314,7 +448,9 @@ export function BillboardFormDialog({
                 <input
                   required
                   value={form.title}
-                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, title: e.target.value }))
+                  }
                   placeholder="Riverside Overpass Hoarding"
                   className={inputClass()}
                 />
@@ -387,7 +523,9 @@ export function BillboardFormDialog({
                   <input
                     required
                     value={form.city}
-                    onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, city: e.target.value }))
+                    }
                     placeholder="Colombo"
                     className={inputClass()}
                   />
@@ -432,7 +570,8 @@ export function BillboardFormDialog({
                     onChange={(e) =>
                       setForm((f) => ({
                         ...f,
-                        trafficLevel: (e.target.value || null) as TrafficLevel | null,
+                        trafficLevel: (e.target.value ||
+                          null) as TrafficLevel | null,
                       }))
                     }
                     className={inputClass()}
@@ -469,22 +608,30 @@ export function BillboardFormDialog({
                     min="1"
                     value={form.pricePerDay || ''}
                     onChange={(e) =>
-                      setForm((f) => ({ ...f, pricePerDay: Number(e.target.value) }))
+                      setForm((f) => ({
+                        ...f,
+                        pricePerDay: Number(e.target.value),
+                      }))
                     }
                     placeholder="150"
                     className={inputClass()}
                   />
                 </label>
                 <label className="block">
-                  <span className={fieldLabelClass()}>Sale price (optional)</span>
+                  <span className={fieldLabelClass()}>
+                    Sale price (optional)
+                  </span>
                   <input
                     type="number"
-                    min="0"
+                    min="1"
+                    aria-invalid={!!salePriceError}
                     value={form.salePricePerDay ?? ''}
                     onChange={(e) =>
                       setForm((f) => ({
                         ...f,
-                        salePricePerDay: e.target.value ? Number(e.target.value) : null,
+                        salePricePerDay: e.target.value
+                          ? Number(e.target.value)
+                          : null,
                       }))
                     }
                     placeholder="e.g. 120"
@@ -492,41 +639,56 @@ export function BillboardFormDialog({
                   />
                 </label>
               </div>
-              {salePriceError && (
-                <p className="-mt-3 text-xs text-brand-error">{salePriceError}</p>
+              {(priceError || salePriceError) && (
+                <p role="alert" className="-mt-3 text-xs text-brand-error">
+                  {priceError ?? salePriceError}
+                </p>
+              )}
+
+              {editing?.adminPriceOverridePerDay != null && (
+                <p className="-mt-2 border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-ink/70 dark:text-paper/70">
+                  An admin has set this listing's price to{' '}
+                  <span className="font-mono font-semibold text-accent">
+                    {formatPrice(editing.adminPriceOverridePerDay)}/day
+                  </span>
+                  . Renters are quoted that price while the override is in
+                  place; your prices above are kept for when it's lifted.
+                  Contact support to change it.
+                </p>
               )}
 
               {editing && <PricingTiersEditor billboardId={editing.id} />}
 
-              <label className="block">
-                <span className={fieldLabelClass()}>Images</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => setNewFiles(Array.from(e.target.files ?? []))}
-                  className="w-full text-xs text-ink/60 dark:text-paper/60"
+              <div>
+                <span className={fieldLabelClass()}>
+                  Photos ({imageItems.length})
+                </span>
+                <BillboardImageManager
+                  items={imageItems}
+                  onChange={setImageItems}
+                  disabled={busy}
                 />
-                {form.images.length > 0 && (
-                  <p className="mt-1 font-mono text-[11px] text-ink/50 dark:text-paper/50">
-                    {form.images.length} existing image
-                    {form.images.length !== 1 ? 's' : ''}
-                  </p>
-                )}
-              </label>
+              </div>
             </div>
 
             <div className="border-t border-ink/10 p-5 dark:border-paper/15">
+              {submitError && (
+                <p role="alert" className="mb-3 text-xs text-brand-error">
+                  {submitError}
+                </p>
+              )}
               <Button
                 type="submit"
-                disabled={uploading || !!salePriceError}
+                disabled={busy || !!salePriceError || !!priceError}
                 className="w-full"
               >
                 {uploading
                   ? 'Uploading images…'
-                  : editing
-                    ? 'Save changes'
-                    : 'Add billboard'}
+                  : saving
+                    ? 'Saving…'
+                    : editing
+                      ? 'Save changes'
+                      : 'Add billboard'}
               </Button>
             </div>
           </form>

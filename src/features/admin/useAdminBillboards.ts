@@ -4,22 +4,126 @@ import {
   toBillboard,
   type BillboardRow,
 } from '@/features/billboards/useBillboards'
+import { fetchAllRows } from '@/lib/fetchAllRows'
+import { invalidateBillboard, queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
+import { isMissingFunctionError } from './adminUtils'
+import { usePagedQuery } from './usePagedQuery'
 
-// Admin moderation view over the full platform catalog, regardless of
-// status — RLS (billboards_select_public) allows an admin to see every
-// billboard, not just status = 'active' ones.
+// Statuses an admin can filter/moderate by. 'archived' arrives with the
+// billboards contract (owner-archived listings); kept as plain strings so
+// this compiles both before and after `BillboardStatus` gains it.
+export const MODERATION_FILTERS = [
+  'all',
+  'flagged',
+  'active',
+  'inactive',
+  'archived',
+] as const
+export type ModerationFilter = (typeof MODERATION_FILTERS)[number]
+export type AdminBillboardStatus = 'active' | 'inactive' | 'flagged'
+
+function invalidateBillboardLists(
+  qc: ReturnType<typeof useQueryClient>,
+  billboardId?: string,
+) {
+  void invalidateBillboard(qc, billboardId)
+}
+
+// Admin view over the full platform catalog, regardless of status — RLS
+// (billboards_select_public) allows an admin to see every billboard. Used by
+// the analytics counts; the moderation list pages with
+// `useAdminBillboardsPaged` instead.
 export function useAdminBillboards() {
   return useQuery({
-    queryKey: ['admin-billboards'],
+    queryKey: queryKeys.adminBillboards.all,
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Paged past PostgREST's 1000-row cap so the counts cover everything.
+      const rows = await fetchAllRows<BillboardRow>((from, to) =>
+        supabase
+          .from('billboards')
+          .select(BILLBOARD_SELECT)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to),
+      )
+      return rows.map(toBillboard)
+    },
+  })
+}
+
+// Paged moderation list ("Load more", PAGE_SIZE at a time); the status
+// filter is applied server-side so paging stays meaningful.
+export function useAdminBillboardsPaged(filter: ModerationFilter) {
+  return usePagedQuery(
+    queryKeys.adminBillboards.paged(filter),
+    async (from, to) => {
+      let query = supabase
         .from('billboards')
         .select(BILLBOARD_SELECT)
         .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+      if (filter !== 'all') query = query.eq('status', filter)
+      const { data, error } = await query.range(from, to)
       if (error) throw error
       return (data as unknown as BillboardRow[]).map(toBillboard)
     },
+  )
+}
+
+export function useFlaggedBillboardCount() {
+  return useQuery({
+    queryKey: queryKeys.adminBillboards.flaggedCount,
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('billboards')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'flagged')
+      if (error) throw error
+      return count ?? 0
+    },
+  })
+}
+
+// Admin status change. Prefers the `admin_set_billboard_status` RPC, which
+// also stores the reason and notifies the owner (admins can't insert into
+// `notifications` directly — RLS only allows reading/updating one's own).
+// Until that migration is applied PostgREST reports the RPC as missing, so
+// fall back to the plain update `billboards_update_owner` allows for admins
+// (no owner notification in that case).
+export async function setBillboardStatusAsAdmin(input: {
+  id: string
+  status: AdminBillboardStatus
+  reason?: string | null
+}): Promise<void> {
+  const { error } = await supabase.rpc('admin_set_billboard_status', {
+    p_billboard_id: input.id,
+    p_status: input.status,
+    p_reason: input.reason?.trim() || null,
+  })
+  if (!error) return
+  if (!isMissingFunctionError(error)) throw error
+  const { error: updateError } = await supabase
+    .from('billboards')
+    .update({ status: input.status })
+    .eq('id', input.id)
+  if (updateError) throw updateError
+}
+
+export function useAdminSetBillboardStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      status: AdminBillboardStatus
+      reason?: string | null
+    }) => {
+      if (input.status === 'flagged' && !input.reason?.trim()) {
+        throw new Error('A reason is required to flag a listing')
+      }
+      await setBillboardStatusAsAdmin(input)
+    },
+    onSuccess: (_data, vars) => invalidateBillboardLists(qc, vars.id),
   })
 }
 
@@ -29,24 +133,13 @@ export function useAdminBillboards() {
 export function useSetAdminPriceOverride() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({
-      id,
-      price,
-    }: {
-      id: string
-      price: number | null
-    }) => {
+    mutationFn: async ({ id, price }: { id: string; price: number | null }) => {
       const { error } = await supabase
         .from('billboards')
         .update({ admin_price_override_per_day: price })
         .eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-billboards'] })
-      qc.invalidateQueries({ queryKey: ['billboards'] })
-      qc.invalidateQueries({ queryKey: ['billboards-near'] })
-      qc.invalidateQueries({ queryKey: ['rentor-billboards'] })
-    },
+    onSuccess: (_data, vars) => invalidateBillboardLists(qc, vars.id),
   })
 }

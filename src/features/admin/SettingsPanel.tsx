@@ -8,6 +8,7 @@ import {
 import { useState, type ChangeEvent } from 'react'
 import { Button, Card } from '@/components'
 import { SUPPORTED_CURRENCIES } from '@/lib/currency'
+import { ConfirmDialog, ErrorText, QueryState } from './AdminUi'
 import {
   useCurrencySetting,
   useUpdateCurrency,
@@ -18,24 +19,41 @@ import {
   useUpdatePaymentGatewaySettings,
 } from './usePaymentGatewaySettings'
 import { uploadSiteLogo } from './uploadSiteLogo'
+import {
+  fileTypeError,
+  IMAGE_ACCEPT,
+  IMAGE_MIME_TYPES,
+  IMAGE_TYPES_LABEL,
+} from '@/lib/fileKind'
 
 function BrandingCard() {
   const { data } = useCurrencySetting()
   const updateSettings = useUpdatePlatformSettings()
   const [siteName, setSiteName] = useState(data?.siteName ?? '')
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<unknown>(null)
 
   const name = siteName || data?.siteName || ''
 
   async function handleLogoChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    const typeProblem = fileTypeError(file, IMAGE_MIME_TYPES, IMAGE_TYPES_LABEL)
+    if (typeProblem) {
+      setUploadError(new Error(typeProblem))
+      e.target.value = ''
+      return
+    }
     setUploading(true)
+    setUploadError(null)
     try {
       const url = await uploadSiteLogo(file)
       await updateSettings.mutateAsync({ siteLogoUrl: url })
+    } catch (err) {
+      setUploadError(err)
     } finally {
       setUploading(false)
+      e.target.value = ''
     }
   }
 
@@ -83,17 +101,23 @@ function BrandingCard() {
         )}
         <input
           type="file"
-          accept="image/*"
+          accept={IMAGE_ACCEPT}
           disabled={uploading}
           onChange={handleLogoChange}
           className="block w-full text-sm"
         />
         {uploading && (
-          <p className="mt-1 text-xs text-ink/50 dark:text-paper/50">
+          <p
+            role="status"
+            className="mt-1 text-xs text-ink/50 dark:text-paper/50"
+          >
             Uploading…
           </p>
         )}
       </label>
+      <div className="mt-2">
+        <ErrorText error={uploadError ?? updateSettings.error} />
+      </div>
     </Card>
   )
 }
@@ -104,6 +128,12 @@ function ServiceFeeCard() {
   const [fee, setFee] = useState('')
 
   const value = fee !== '' ? fee : (data?.platformFeePercent?.toString() ?? '0')
+  const feeNumber = Number(value)
+  const feeValid =
+    value.trim() !== '' &&
+    Number.isFinite(feeNumber) &&
+    feeNumber >= 0 &&
+    feeNumber <= 100
 
   return (
     <Card ticks className="max-w-sm p-5">
@@ -129,9 +159,9 @@ function ServiceFeeCard() {
           />
           <Button
             size="sm"
-            disabled={updateSettings.isPending}
+            disabled={updateSettings.isPending || !feeValid}
             onClick={() =>
-              updateSettings.mutate({ platformFeePercent: Number(value) })
+              updateSettings.mutate({ platformFeePercent: feeNumber })
             }
           >
             Save
@@ -141,6 +171,14 @@ function ServiceFeeCard() {
       <p className="mt-2 font-mono text-[11px] text-ink/50 dark:text-paper/50">
         Deducted from every rentor payout going forward.
       </p>
+      {!feeValid && (
+        <p className="mt-1 text-xs text-brand-error">
+          Enter a percentage between 0 and 100.
+        </p>
+      )}
+      <div className="mt-1">
+        <ErrorText error={updateSettings.error} />
+      </div>
     </Card>
   )
 }
@@ -184,9 +222,12 @@ function NotificationSenderCard() {
         </div>
       </label>
       <p className="mt-2 font-mono text-[11px] text-ink/50 dark:text-paper/50">
-        Must be a verified sender in your email provider, or notification
-        emails (e.g. admin-promotion alerts) won't send.
+        Must be a verified sender in your email provider, or notification emails
+        (e.g. admin-promotion alerts) won't send.
       </p>
+      <div className="mt-1">
+        <ErrorText error={updateSettings.error} />
+      </div>
     </Card>
   )
 }
@@ -202,12 +243,14 @@ function PaymentGatewayCard() {
   const publicKeyValue = publicKey !== '' ? publicKey : (data?.publicKey ?? '')
 
   function handleSave() {
-    updateGateway.mutate({
-      provider: providerValue.trim() || undefined,
-      publicKey: publicKeyValue.trim() || undefined,
-      secretKey: secretKey.trim() || undefined,
-    })
-    setSecretKey('')
+    updateGateway.mutate(
+      {
+        provider: providerValue.trim() || undefined,
+        publicKey: publicKeyValue.trim() || undefined,
+        secretKey: secretKey.trim() || undefined,
+      },
+      { onSuccess: () => setSecretKey('') },
+    )
   }
 
   return (
@@ -269,13 +312,30 @@ function PaymentGatewayCard() {
       >
         Save
       </Button>
+      <div className="mt-2">
+        <ErrorText error={updateGateway.error} />
+      </div>
     </Card>
   )
 }
 
 export function SettingsPanel() {
-  const { data } = useCurrencySetting()
+  const settingsQuery = useCurrencySetting()
+  const { data } = settingsQuery
   const updateCurrency = useUpdateCurrency()
+  const [pendingCurrency, setPendingCurrency] = useState<string | null>(null)
+  const currentCurrency = data?.currency ?? 'LKR'
+
+  if (settingsQuery.isLoading || settingsQuery.error) {
+    return (
+      <QueryState
+        isLoading={settingsQuery.isLoading}
+        error={settingsQuery.error}
+        onRetry={() => settingsQuery.refetch()}
+        label="Loading settings…"
+      />
+    )
+  }
 
   return (
     <div className="flex flex-wrap gap-5">
@@ -292,8 +352,12 @@ export function SettingsPanel() {
             Currency
           </span>
           <select
-            value={data?.currency ?? 'LKR'}
-            onChange={(e) => updateCurrency.mutate(e.target.value)}
+            value={currentCurrency}
+            disabled={updateCurrency.isPending}
+            onChange={(e) => {
+              if (e.target.value !== currentCurrency)
+                setPendingCurrency(e.target.value)
+            }}
             className="w-full border-b border-ink/20 bg-transparent py-2 text-sm focus:border-accent focus:outline-none dark:border-paper/20"
           >
             {SUPPORTED_CURRENCIES.map((code) => (
@@ -304,9 +368,38 @@ export function SettingsPanel() {
           </select>
         </label>
         <p className="mt-2 font-mono text-[11px] text-ink/50 dark:text-paper/50">
-          Applies to every price shown across the platform.
+          Applies to every price shown across the platform. Stored amounts are
+          relabelled, not converted.
         </p>
+        <div className="mt-1">
+          <ErrorText error={updateCurrency.error} />
+        </div>
       </Card>
+
+      <ConfirmDialog
+        open={pendingCurrency !== null}
+        onOpenChange={(open) => !open && setPendingCurrency(null)}
+        title={`Switch currency to ${pendingCurrency ?? ''}?`}
+        description={
+          <>
+            <p>
+              Every stored price, booking quote, payment and payout keeps its
+              number and is simply shown in {pendingCurrency} instead of{' '}
+              {currentCurrency} — nothing is converted. A listing at 5,000{' '}
+              {currentCurrency} will read 5,000 {pendingCurrency}.
+            </p>
+            <p className="mt-2">
+              Only do this before prices are entered, or after re-pricing.
+            </p>
+          </>
+        }
+        confirmLabel={`Switch to ${pendingCurrency ?? ''}`}
+        variant="danger"
+        onConfirm={() => {
+          if (pendingCurrency)
+            return updateCurrency.mutateAsync(pendingCurrency)
+        }}
+      />
 
       <BrandingCard />
       <ServiceFeeCard />

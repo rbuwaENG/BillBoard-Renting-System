@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { invalidateBillboard, queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 
 interface SubmitReviewInput {
@@ -19,9 +20,9 @@ export function useSubmitReview() {
       if (error) throw error
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['my-bookings'] })
-      qc.invalidateQueries({ queryKey: ['billboards'] })
-      qc.invalidateQueries({ queryKey: ['billboards-near'] })
+      qc.invalidateQueries({ queryKey: queryKeys.myBookings.all })
+      // The billboard's rating changes — refresh every listing view.
+      void invalidateBillboard(qc)
     },
   })
 }

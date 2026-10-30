@@ -1,11 +1,13 @@
 import { useEffect } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
-import { BillboardMark, Button } from '@/components'
+import { NavLink, Outlet, useNavigation } from 'react-router-dom'
+import { BillboardMark, Button, Toaster } from '@/components'
 import { useCurrencySetting } from '@/features/admin/useCurrencySetting'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 import { useAuth, useAuthStore } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import type { UserRole } from '@/types'
+import { NavigationProgress } from './PageLoader'
+import { ProfileErrorBanner } from './ProfileError'
 
 const DEFAULT_SITE_NAME = 'Billboard Renting System'
 
@@ -23,10 +25,11 @@ const NAV_LINKS: NavLinkDef[] = [
 ]
 
 export function RootLayout() {
-  const { user, role } = useAuth()
+  const { user, role, profileError } = useAuth()
   const signOut = useAuthStore((s) => s.signOut)
   const { data: settings } = useCurrencySetting()
   const siteName = settings?.siteName || DEFAULT_SITE_NAME
+  const navigation = useNavigation()
 
   useEffect(() => {
     document.title = siteName
@@ -38,11 +41,22 @@ export function RootLayout() {
 
   return (
     <div className="flex min-h-svh flex-col bg-paper text-ink dark:bg-ink dark:text-paper">
+      <a
+        href="#main-content"
+        className="sr-only z-[2100] bg-ink px-4 py-2 font-mono text-xs tracking-widest text-paper uppercase focus:not-sr-only focus:fixed focus:top-2 focus:left-2 dark:bg-paper dark:text-ink"
+      >
+        Skip to content
+      </a>
+      <NavigationProgress active={navigation.state === 'loading'} />
       <header className="border-b border-ink/10 dark:border-paper/10">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <NavLink to="/" className="flex items-center gap-2.5">
             {settings?.siteLogoUrl ? (
-              <img src={settings.siteLogoUrl} alt={siteName} className="h-7 w-auto" />
+              <img
+                src={settings.siteLogoUrl}
+                alt={siteName}
+                className="h-7 w-auto"
+              />
             ) : (
               <BillboardMark className="size-7" />
             )}
@@ -57,7 +71,10 @@ export function RootLayout() {
             </span>
           </NavLink>
 
-          <nav className="flex items-center gap-6 overflow-x-auto font-mono text-xs tracking-widest uppercase">
+          <nav
+            aria-label="Main"
+            className="flex items-center gap-6 overflow-x-auto font-mono text-xs tracking-widest uppercase"
+          >
             {visibleLinks.map((link) => (
               <NavLink
                 key={link.to}
@@ -108,10 +125,16 @@ export function RootLayout() {
           )}
         </div>
       </header>
+      {!user && profileError && <ProfileErrorBanner />}
 
-      <main className="flex-1">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex-1 focus:outline-none"
+      >
         <Outlet />
       </main>
+      <Toaster />
     </div>
   )
 }

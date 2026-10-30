@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
+import { invalidateBooking, queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 
 export interface CampaignItem {
@@ -54,11 +55,13 @@ function toCampaign(row: CampaignRow): Campaign {
 export function useMyCampaigns() {
   const { user } = useAuth()
   return useQuery({
-    queryKey: ['my-campaigns', user?.uid],
+    queryKey: queryKeys.myCampaigns(user?.uid),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('campaigns')
-        .select('*, campaign_items(billboard_id, booking_id, status, failure_reason, billboards(title))')
+        .select(
+          '*, campaign_items(billboard_id, booking_id, status, failure_reason, billboards(title))',
+        )
         .eq('renter_id', user!.uid)
         .order('created_at', { ascending: false })
       if (error) throw error
@@ -86,9 +89,7 @@ export function useCreateCampaign() {
       if (error) throw error
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['my-campaigns'] })
-      qc.invalidateQueries({ queryKey: ['my-bookings'] })
-      qc.invalidateQueries({ queryKey: ['owner-bookings'] })
+      invalidateBooking(qc)
     },
   })
 }

@@ -1,17 +1,25 @@
-import { LocateFixed, Moon, ShoppingCart, SlidersHorizontal, Sun, X } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import {
+  LocateFixed,
+  Moon,
+  ShoppingCart,
+  SlidersHorizontal,
+  Sun,
+  X,
+} from 'lucide-react'
+import { useEffect, type ReactNode } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { currentPath, loginPath } from '@/features/auth/redirect'
+import { CampaignDraftForm } from '@/features/campaigns/CampaignDraftForm'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
+import { useListedDraft } from '@/features/campaigns/useListedDraft'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
-import { useCreateCampaign } from '@/features/renter/useCampaigns'
+import { todayISO, validateDateRange } from '@/features/bookings/dateRange'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { MapIconButton } from './MapIconButton'
 import { useMapPopoverStore } from './mapPopoverStore'
-import type { BillboardWithDetails } from './useBillboards'
 
 interface MapOverlayControlsProps {
-  billboards: BillboardWithDetails[]
   isDark: boolean
   onToggleTheme: () => void
   categories: string[]
@@ -28,6 +36,9 @@ interface MapOverlayControlsProps {
   onPriceMaxChange: (price: number) => void
   myBillboardsActive: boolean
   onToggleMyBillboards: () => void
+  availableFrom: string
+  availableTo: string
+  onAvailableChange: (from: string, to: string) => void
   nearMeActive: boolean
   onLocateMe: () => void
   onDisableNearMe: () => void
@@ -51,6 +62,7 @@ function ChipButton({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={cn(
         'border px-2 py-1 font-mono text-[11px] uppercase transition-colors',
@@ -64,84 +76,122 @@ function ChipButton({
   )
 }
 
-function CampaignControl({ billboards }: { billboards: BillboardWithDetails[] }) {
-  const { user } = useAuth()
+function AvailableBetweenFilter({
+  from,
+  to,
+  onChange,
+}: {
+  from: string
+  to: string
+  onChange: (from: string, to: string) => void
+}) {
+  const today = todayISO()
+  const errors = validateDateRange(from, to, today)
+  const inputClass =
+    'w-full border border-ink/15 bg-transparent px-1.5 py-1 text-xs focus:border-accent focus:outline-none dark:border-paper/15'
+  return (
+    <div
+      role="group"
+      aria-label="Available between"
+      className="border-t border-dashed border-ink/15 pt-3 dark:border-paper/15"
+    >
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
+          Available between
+        </span>
+        {(from || to) && (
+          <button
+            type="button"
+            onClick={() => onChange('', '')}
+            className="font-mono text-[11px] text-accent uppercase hover:underline"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <label className="block w-1/2">
+          <span className="sr-only">Available from</span>
+          <input
+            type="date"
+            value={from}
+            min={today}
+            aria-invalid={!!errors.start}
+            onChange={(e) => {
+              const next = e.target.value
+              onChange(next, to && next && to < next ? '' : to)
+            }}
+            className={inputClass}
+          />
+        </label>
+        <label className="block w-1/2">
+          <span className="sr-only">Available until</span>
+          <input
+            type="date"
+            value={to}
+            min={from && from > today ? from : today}
+            aria-invalid={!!errors.end}
+            onChange={(e) => onChange(from, e.target.value)}
+            className={inputClass}
+          />
+        </label>
+      </div>
+      {(errors.start || errors.end) && (
+        <p role="alert" className="mt-1 text-[11px] text-brand-error">
+          {errors.start ?? errors.end}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function CampaignControl() {
+  const { user, role } = useAuth()
   const navigate = useNavigate()
-  const formatPrice = useFormatPrice()
+  const location = useLocation()
   const open = useMapPopoverStore((s) => s.active === 'campaign')
   const togglePopover = useMapPopoverStore((s) => s.toggle)
   const closePopover = useMapPopoverStore((s) => s.close)
-  const [name, setName] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const draftIds = useCampaignStore((s) => s.draftIds)
   const removeFromDraft = useCampaignStore((s) => s.removeFromDraft)
-  const clearDraft = useCampaignStore((s) => s.clearDraft)
-  const createCampaign = useCreateCampaign()
+  const { draftBillboards, staleIds, count } = useListedDraft()
 
-  const draftBillboards = draftIds
-    .map((id) => billboards.find((b) => b.id === id))
-    .filter((b): b is NonNullable<typeof b> => Boolean(b))
-
-  const days =
-    startDate && endDate
-      ? Math.max(
-          1,
-          Math.round(
-            (new Date(endDate).getTime() - new Date(startDate).getTime()) /
-              86_400_000,
-          ) + 1,
-        )
-      : 0
-  const total =
-    draftBillboards.reduce((sum, b) => sum + b.pricePerDay, 0) * days
+  // Cart is a renter feature; logged-out visitors still see it (→ log in).
+  if (user && role !== 'renter') return null
 
   function handleToggleOpen() {
     if (!user) {
-      navigate('/login')
+      navigate(loginPath(currentPath(location)))
       return
     }
     togglePopover('campaign')
   }
 
-  async function handleCreate() {
-    if (!name.trim() || !startDate || !endDate || draftBillboards.length === 0)
-      return
-    try {
-      await createCampaign.mutateAsync({
-        name: name.trim(),
-        startDate,
-        endDate,
-        billboardIds: draftBillboards.map((b) => b.id),
-      })
-      setName('')
-      setStartDate('')
-      setEndDate('')
-      closePopover()
-      clearDraft()
-    } catch {
-      // error surfaced via createCampaign.error below
-    }
-  }
-
   return (
     <div className="pointer-events-auto relative">
       <MapIconButton
-        title="Cart"
-        active={open || draftIds.length > 0}
+        title={count > 0 ? `Cart (${count})` : 'Cart'}
+        aria-expanded={open}
+        active={open || count > 0}
         onClick={handleToggleOpen}
         className="relative"
       >
         <ShoppingCart className="size-4" />
-        {draftIds.length > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-accent font-mono text-[9px] text-paper">
-            {draftIds.length}
+        {count > 0 && (
+          <span
+            aria-hidden="true"
+            className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-accent font-mono text-[9px] text-paper"
+          >
+            {count}
           </span>
         )}
       </MapIconButton>
 
       {open && (
-        <div className="absolute top-0 right-full mr-2 w-72 space-y-3 border border-ink/10 bg-paper p-3 shadow-lg dark:border-paper/15 dark:bg-ink-soft">
+        <div
+          role="dialog"
+          aria-label="Cart"
+          className="absolute top-0 right-full mr-2 max-h-[70svh] w-72 max-w-[calc(100vw-5rem)] space-y-3 overflow-y-auto border border-ink/10 bg-paper p-3 shadow-lg dark:border-paper/15 dark:bg-ink-soft"
+        >
           <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
             Cart
           </span>
@@ -163,6 +213,7 @@ function CampaignControl({ billboards }: { billboards: BillboardWithDetails[] })
                     type="button"
                     onClick={() => removeFromDraft(b.id)}
                     title="Remove"
+                    aria-label={`Remove ${b.title} from cart`}
                     className="shrink-0 text-ink/40 hover:text-brand-error dark:text-paper/40"
                   >
                     <X className="size-3.5" />
@@ -172,52 +223,29 @@ function CampaignControl({ billboards }: { billboards: BillboardWithDetails[] })
             </ul>
           )}
 
-          <div className="space-y-2 border-t border-dashed border-ink/15 pt-3 dark:border-paper/15">
-            <input
-              type="text"
-              placeholder="Campaign name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full border border-ink/15 bg-transparent px-2 py-1.5 text-sm focus:border-accent focus:outline-none dark:border-paper/15"
+          {staleIds.length > 0 && (
+            <p className="flex items-center justify-between gap-2 text-[11px] text-ink/50 dark:text-paper/50">
+              <span>
+                {staleIds.length === 1
+                  ? '1 billboard is no longer listed.'
+                  : `${staleIds.length} billboards are no longer listed.`}
+              </span>
+              <button
+                type="button"
+                onClick={() => staleIds.forEach(removeFromDraft)}
+                className="shrink-0 font-mono text-accent uppercase hover:underline"
+              >
+                Remove
+              </button>
+            </p>
+          )}
+
+          <div className="border-t border-dashed border-ink/15 pt-3 dark:border-paper/15">
+            <CampaignDraftForm
+              compact
+              draftBillboards={draftBillboards}
+              onCreated={closePopover}
             />
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-1/2 border border-ink/15 bg-transparent px-2 py-1.5 text-xs focus:border-accent focus:outline-none dark:border-paper/15"
-              />
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-1/2 border border-ink/15 bg-transparent px-2 py-1.5 text-xs focus:border-accent focus:outline-none dark:border-paper/15"
-              />
-            </div>
-            {days > 0 && draftBillboards.length > 0 && (
-              <p className="text-right font-mono text-xs text-accent">
-                Est. total {formatPrice(total)}
-              </p>
-            )}
-            {createCampaign.isError && (
-              <p className="text-xs text-brand-error">
-                {(createCampaign.error as Error).message}
-              </p>
-            )}
-            <button
-              type="button"
-              disabled={
-                !name.trim() ||
-                !startDate ||
-                !endDate ||
-                draftBillboards.length === 0 ||
-                createCampaign.isPending
-              }
-              onClick={handleCreate}
-              className="w-full border border-accent bg-accent px-3 py-2 font-mono text-xs uppercase text-paper transition-colors hover:bg-accent-dim disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {createCampaign.isPending ? 'Creating…' : 'Create campaign'}
-            </button>
           </div>
         </div>
       )}
@@ -226,7 +254,6 @@ function CampaignControl({ billboards }: { billboards: BillboardWithDetails[] })
 }
 
 export function MapOverlayControls({
-  billboards,
   isDark,
   onToggleTheme,
   categories,
@@ -243,6 +270,9 @@ export function MapOverlayControls({
   onPriceMaxChange,
   myBillboardsActive,
   onToggleMyBillboards,
+  availableFrom,
+  availableTo,
+  onAvailableChange,
   nearMeActive,
   onLocateMe,
   onDisableNearMe,
@@ -253,17 +283,32 @@ export function MapOverlayControls({
   onToggleGeofence,
   renterControl,
 }: MapOverlayControlsProps) {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const formatPrice = useFormatPrice()
+  const anyOpen = useMapPopoverStore((s) => s.active !== null)
   const filtersOpen = useMapPopoverStore((s) => s.active === 'filters')
   const nearMeOpen = useMapPopoverStore((s) => s.active === 'nearme')
   const togglePopover = useMapPopoverStore((s) => s.toggle)
+  const closePopover = useMapPopoverStore((s) => s.close)
   const [priceMin, priceCeil] = priceBounds
+  const showMyBillboards = !user || role === 'renter'
+
+  // Escape closes whichever map popover is open (filters, cart, near me,
+  // My activity) - they all share this store.
+  useEffect(() => {
+    if (!anyOpen) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') closePopover()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [anyOpen, closePopover])
 
   function handleToggleMyBillboards() {
     if (!user) {
-      navigate('/login')
+      navigate(loginPath(currentPath(location)))
       return
     }
     onToggleMyBillboards()
@@ -281,13 +326,14 @@ export function MapOverlayControls({
 
       <div className="pointer-events-auto relative">
         <MapIconButton
-          title="Filter by category, size, district & price"
+          title="Filter by category, size, district, price & dates"
           active={
             filtersOpen ||
             selectedCategories.size > 0 ||
             selectedSizes.size > 0 ||
             selectedDistricts.size > 0 ||
-            priceMax < priceCeil
+            priceMax < priceCeil ||
+            (!!availableFrom && !!availableTo)
           }
           onClick={() => togglePopover('filters')}
         >
@@ -369,22 +415,30 @@ export function MapOverlayControls({
               />
             </div>
 
-            <div className="flex items-center justify-between border-t border-dashed border-ink/15 pt-3 dark:border-paper/15">
-              <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
-                My billboards
-              </span>
-              <ChipButton
-                active={myBillboardsActive}
-                onClick={handleToggleMyBillboards}
-              >
-                {myBillboardsActive ? 'On' : 'Off'}
-              </ChipButton>
-            </div>
+            <AvailableBetweenFilter
+              from={availableFrom}
+              to={availableTo}
+              onChange={onAvailableChange}
+            />
+
+            {showMyBillboards && (
+              <div className="flex items-center justify-between border-t border-dashed border-ink/15 pt-3 dark:border-paper/15">
+                <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
+                  My billboards
+                </span>
+                <ChipButton
+                  active={myBillboardsActive}
+                  onClick={handleToggleMyBillboards}
+                >
+                  {myBillboardsActive ? 'On' : 'Off'}
+                </ChipButton>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      <CampaignControl billboards={billboards} />
+      <CampaignControl />
 
       {renterControl}
 

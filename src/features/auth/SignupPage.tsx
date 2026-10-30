@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import { BillboardMark, Button } from '@/components'
 import { supabase } from '@/lib/supabase'
 import type { UserRole } from '@/types'
+import { loginPath, sanitizeNext } from './redirect'
 
 const ROLE_HOME: Record<UserRole, string> = {
   renter: '/',
@@ -14,13 +15,21 @@ const ROLE_HOME: Record<UserRole, string> = {
 }
 
 const SIGNUP_ROLES: { role: UserRole; label: string; hint: string }[] = [
-  { role: 'renter', label: 'Renter', hint: 'Rent billboard space to advertise' },
-  { role: 'rentor', label: 'Owner', hint: 'List and manage your own billboards' },
+  {
+    role: 'renter',
+    label: 'Renter',
+    hint: 'Rent billboard space to advertise',
+  },
+  {
+    role: 'rentor',
+    label: 'Owner',
+    hint: 'List and manage your own billboards',
+  },
 ]
 
 const signupSchema = z.object({
   name: z.string().min(1, 'Enter your name'),
-  email: z.string().email('Enter a valid email address'),
+  email: z.email('Enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   role: z.enum(['renter', 'rentor']),
 })
@@ -31,6 +40,8 @@ type SignupFormValues = z.infer<typeof signupSchema>
 // direct admin SQL), so only renter/rentor are offered here.
 export function SignupPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const next = sanitizeNext(searchParams.get('next'))
   const [confirmationSent, setConfirmationSent] = useState(false)
   const {
     register,
@@ -51,7 +62,7 @@ export function SignupPage() {
       password: values.password,
       options: {
         data: { display_name: values.name, role: values.role },
-        emailRedirectTo: `${window.location.origin}/login`,
+        emailRedirectTo: `${window.location.origin}${loginPath(next)}`,
       },
     })
     if (error) {
@@ -60,7 +71,13 @@ export function SignupPage() {
     }
 
     if (data.session) {
-      navigate(ROLE_HOME[values.role])
+      // `next` only makes sense for renters (it points at a renter action).
+      navigate(
+        values.role === 'renter' && next ? next : ROLE_HOME[values.role],
+        {
+          replace: true,
+        },
+      )
     } else {
       setConfirmationSent(true)
     }
@@ -77,7 +94,10 @@ export function SignupPage() {
           We sent a confirmation link to finish creating your account. Once
           confirmed, log in to continue.
         </p>
-        <Link to="/login" className="mt-6 text-sm text-accent hover:underline">
+        <Link
+          to={loginPath(next)}
+          className="mt-6 text-sm text-accent hover:underline"
+        >
           Go to log in
         </Link>
       </div>
@@ -215,7 +235,7 @@ export function SignupPage() {
 
           <p className="mt-6 text-center text-xs text-ink/50 dark:text-paper/50">
             Already have an account?{' '}
-            <Link to="/login" className="text-accent hover:underline">
+            <Link to={loginPath(next)} className="text-accent hover:underline">
               Log in
             </Link>
           </p>

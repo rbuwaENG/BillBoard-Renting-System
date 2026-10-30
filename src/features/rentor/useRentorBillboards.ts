@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
+import { uploadPath } from '@/lib/fileKind'
+import { invalidateBillboard, queryKeys } from '@/lib/queryKeys'
 import { supabase } from '@/lib/supabase'
 import type { BillboardStatus, TrafficLevel } from '@/types'
+
+// Contract 2: owners may switch a listing among active/inactive/archived, but
+// never out of `flagged` (enforced server-side). `'archived'` is added here
+// until the shared BillboardStatus type carries it.
+export type OwnerBillboardStatus = BillboardStatus | 'archived'
 
 export interface RentorBillboard {
   id: string
@@ -17,7 +24,10 @@ export interface RentorBillboard {
   salePricePerDay: number | null
   adminPriceOverridePerDay: number | null
   images: string[]
-  status: BillboardStatus
+  status: OwnerBillboardStatus
+  // Set when an admin moderated the listing (0035): only an admin can then
+  // change its status, and the owner can't delete it.
+  statusLockedByAdmin: boolean
   district: string | null
   trafficLevel: TrafficLevel | null
   rating: { avg: number; count: number }
@@ -56,7 +66,8 @@ interface RentorBillboardRow {
   sale_price_per_day: number | null
   admin_price_override_per_day: number | null
   images: string[]
-  status: BillboardStatus
+  status: OwnerBillboardStatus
+  status_locked_by_admin?: boolean | null
   district: string | null
   traffic_level: TrafficLevel | null
   rating_avg: number
@@ -77,12 +88,18 @@ function toRentorBillboard(row: RentorBillboardRow): RentorBillboard {
     sizeId: row.size_id,
     category: row.categories?.name ?? 'Uncategorized',
     size: row.sizes?.label ?? '—',
-    location: { lat: row.lat, lng: row.lng, address: row.address, city: row.city },
+    location: {
+      lat: row.lat,
+      lng: row.lng,
+      address: row.address,
+      city: row.city,
+    },
     pricePerDay: row.price_per_day,
     salePricePerDay: row.sale_price_per_day,
     adminPriceOverridePerDay: row.admin_price_override_per_day,
     images: row.images,
     status: row.status,
+    statusLockedByAdmin: !!row.status_locked_by_admin,
     district: row.district,
     trafficLevel: row.traffic_level,
     rating: { avg: row.rating_avg, count: row.rating_count },
@@ -96,7 +113,7 @@ const SELECT = '*, categories(name), sizes(label)'
 export function useRentorBillboards() {
   const { user } = useAuth()
   return useQuery({
-    queryKey: ['rentor-billboards', user?.uid],
+    queryKey: queryKeys.rentorBillboards(user?.uid),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('billboards')
@@ -116,21 +133,24 @@ export async function uploadBillboardImages(
 ): Promise<string[]> {
   const urls: string[] = []
   for (const file of Array.from(files)) {
-    const path = `${ownerId}/${crypto.randomUUID()}-${file.name}`
+    const path = uploadPath(ownerId, file)
     const { error } = await supabase.storage
       .from('billboard-images')
       .upload(path, file)
     if (error) throw error
-    const { data } = supabase.storage.from('billboard-images').getPublicUrl(path)
+    const { data } = supabase.storage
+      .from('billboard-images')
+      .getPublicUrl(path)
     urls.push(data.publicUrl)
   }
   return urls
 }
 
-function invalidateBillboardQueries(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: ['rentor-billboards'] })
-  qc.invalidateQueries({ queryKey: ['billboards'] })
-  qc.invalidateQueries({ queryKey: ['billboards-near'] })
+function invalidateBillboardQueries(
+  qc: ReturnType<typeof useQueryClient>,
+  billboardId?: string,
+) {
+  void invalidateBillboard(qc, billboardId)
 }
 
 export function useCreateBillboard() {
@@ -190,21 +210,27 @@ export function useUpdateBillboard() {
         .eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => invalidateBillboardQueries(qc),
+    onSuccess: (_data, vars) => invalidateBillboardQueries(qc, vars.id),
   })
 }
 
 export function useSetBillboardStatus() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: BillboardStatus }) => {
+    mutationFn: async ({
+      id,
+      status,
+    }: {
+      id: string
+      status: OwnerBillboardStatus
+    }) => {
       const { error } = await supabase
         .from('billboards')
         .update({ status })
         .eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => invalidateBillboardQueries(qc),
+    onSuccess: (_data, vars) => invalidateBillboardQueries(qc, vars.id),
   })
 }
 
@@ -215,6 +241,6 @@ export function useDeleteBillboard() {
       const { error } = await supabase.from('billboards').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => invalidateBillboardQueries(qc),
+    onSuccess: (_data, id) => invalidateBillboardQueries(qc, id),
   })
 }

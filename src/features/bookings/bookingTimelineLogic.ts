@@ -1,7 +1,15 @@
+import type { PaymentState } from '@/features/payments/paymentState'
 import type { Booking } from '@/types'
+import type { AnyBookingStatus } from './bookingStatus'
 import type { BookingEvent } from './useBookingEvents'
 
-export type TimelineStageState = 'completed' | 'current' | 'upcoming' | 'blocked'
+export const EXPIRED_REQUEST_COPY =
+  "Request expired — the owner didn't respond in time"
+export const EXPIRED_PAYMENT_COPY =
+  "Booking expired — payment wasn't completed in time"
+
+export type TimelineStageState =
+  'completed' | 'current' | 'upcoming' | 'blocked'
 export type TimelineActor = 'customer' | 'owner' | 'platform'
 
 export interface TimelineStage {
@@ -11,12 +19,18 @@ export interface TimelineStage {
   timestamp?: string
   description?: string
   actor?: TimelineActor
+  // Set on a completed "Posted" stage: BookingTimeline shows that booking's
+  // proof-of-posting photos under the steps.
+  proofBookingId?: string
 }
 
 export interface TimelineContext {
   viewerRole: 'renter' | 'owner'
   ownerName: string
   renterName: string
+  // Renter-side payment submission state (renter_submit_payment); omitted →
+  // nothing submitted yet.
+  paymentState?: PaymentState
 }
 
 export interface AwaitingDocumentsInfo {
@@ -25,13 +39,20 @@ export interface AwaitingDocumentsInfo {
   requestedAt?: string
 }
 
-function findEventTimestamp(events: BookingEvent[], toStatus: string): string | undefined {
-  return events.find((e) => e.eventType === 'status_change' && e.toStatus === toStatus)?.createdAt
+function findEventTimestamp(
+  events: BookingEvent[],
+  toStatus: string,
+): string | undefined {
+  return events.find(
+    (e) => e.eventType === 'status_change' && e.toStatus === toStatus,
+  )?.createdAt
 }
 
 // A document request is "resolved" once the renter uploads something after
 // it was asked for — purely derived from the event log, no extra status.
-export function getAwaitingDocumentsInfo(events: BookingEvent[]): AwaitingDocumentsInfo {
+export function getAwaitingDocumentsInfo(
+  events: BookingEvent[],
+): AwaitingDocumentsInfo {
   let lastRequest: BookingEvent | null = null
   let lastUpload: BookingEvent | null = null
   for (const e of events) {
@@ -40,7 +61,22 @@ export function getAwaitingDocumentsInfo(events: BookingEvent[]): AwaitingDocume
   }
   if (!lastRequest) return { active: false, note: null }
   const resolved = !!lastUpload && lastUpload.createdAt > lastRequest.createdAt
-  return { active: !resolved, note: lastRequest.message, requestedAt: lastRequest.createdAt }
+  return {
+    active: !resolved,
+    note: lastRequest.message,
+    requestedAt: lastRequest.createdAt,
+  }
+}
+
+// When the owner first shared proof of posting (add_proof_of_posting logs a
+// 'proof_posted' event per photo), or undefined if there is none yet.
+export function getProofPostedAt(events: BookingEvent[]): string | undefined {
+  let first: string | undefined
+  for (const e of events) {
+    if (e.eventType === 'proof_posted' && (!first || e.createdAt < first))
+      first = e.createdAt
+  }
+  return first
 }
 
 export function computeBookingTimeline(
@@ -51,6 +87,9 @@ export function computeBookingTimeline(
   const stages: TimelineStage[] = []
   const awaiting = getAwaitingDocumentsInfo(events)
   const isRenter = ctx.viewerRole === 'renter'
+  const status = booking.status as AnyBookingStatus
+  const paymentState = ctx.paymentState ?? 'none'
+  const proofPostedAt = getProofPostedAt(events)
 
   stages.push({
     key: 'submitted',
@@ -64,7 +103,12 @@ export function computeBookingTimeline(
   })
 
   if (booking.status === 'rejected') {
-    stages.push({ key: 'review', label: 'Owner Reviewing', state: 'completed', timestamp: booking.createdAt })
+    stages.push({
+      key: 'review',
+      label: 'Owner Reviewing',
+      state: 'completed',
+      timestamp: booking.createdAt,
+    })
     stages.push({
       key: 'declined',
       label: 'Request Declined',
@@ -84,7 +128,12 @@ export function computeBookingTimeline(
 
   if (booking.status === 'cancelled') {
     const wasApproved = events.some((e) => e.toStatus === 'payment_pending')
-    stages.push({ key: 'review', label: 'Owner Reviewing', state: 'completed', timestamp: booking.createdAt })
+    stages.push({
+      key: 'review',
+      label: 'Owner Reviewing',
+      state: 'completed',
+      timestamp: booking.createdAt,
+    })
     if (wasApproved) {
       stages.push({
         key: 'payment',
@@ -99,6 +148,40 @@ export function computeBookingTimeline(
       state: 'blocked',
       timestamp: findEventTimestamp(events, 'cancelled'),
       description: 'This booking was cancelled before the rental began.',
+      actor: 'platform',
+    })
+    return stages
+  }
+
+  if (status === 'expired') {
+    const wasApproved = events.some((e) => e.toStatus === 'payment_pending')
+    stages.push({
+      key: 'review',
+      label: 'Owner Reviewing',
+      state: wasApproved ? 'completed' : 'blocked',
+      timestamp: booking.createdAt,
+    })
+    if (wasApproved) {
+      stages.push({
+        key: 'payment',
+        label: 'Payment Pending',
+        state: 'completed',
+        timestamp:
+          findEventTimestamp(events, 'payment_pending') ?? booking.decisionAt,
+      })
+    }
+    stages.push({
+      key: 'expired',
+      label: 'Request Expired',
+      state: 'blocked',
+      timestamp: findEventTimestamp(events, 'expired') ?? booking.updatedAt,
+      description: wasApproved
+        ? isRenter
+          ? `${EXPIRED_PAYMENT_COPY}. You can request these dates again if they're still free.`
+          : `${EXPIRED_PAYMENT_COPY}.`
+        : isRenter
+          ? `${EXPIRED_REQUEST_COPY}. You can send a new request.`
+          : "This request expired because it wasn't answered in time.",
       actor: 'platform',
     })
     return stages
@@ -131,7 +214,12 @@ export function computeBookingTimeline(
       })
     }
   } else {
-    stages.push({ key: 'review', label: 'Owner Reviewing', state: 'completed', timestamp: booking.createdAt })
+    stages.push({
+      key: 'review',
+      label: 'Owner Reviewing',
+      state: 'completed',
+      timestamp: booking.createdAt,
+    })
   }
 
   // --- Payment Pending (or the same interstitial, if requested post-approval) ---
@@ -156,12 +244,22 @@ export function computeBookingTimeline(
         state: 'current',
         timestamp: booking.decisionAt,
         description: isRenter
-          ? 'Your booking is awaiting payment. Complete the payment to proceed.'
-          : `Waiting on ${ctx.renterName} to complete payment.`,
-        actor: 'customer',
+          ? paymentState === 'submitted'
+            ? "Payment submitted — awaiting admin confirmation. We'll notify you once it's confirmed."
+            : paymentState === 'rejected'
+              ? 'Payment rejected — please check your transfer and resubmit.'
+              : 'Your booking is approved. Pay the quoted amount by bank transfer, then tap “I’ve paid”.'
+          : paymentState === 'submitted'
+            ? `${ctx.renterName} submitted a payment — awaiting admin confirmation.`
+            : `Waiting on ${ctx.renterName} to complete payment.`,
+        actor: paymentState === 'submitted' ? 'platform' : 'customer',
       })
     }
-  } else if (booking.status === 'confirmed' || booking.status === 'active' || booking.status === 'completed') {
+  } else if (
+    booking.status === 'confirmed' ||
+    booking.status === 'active' ||
+    booking.status === 'completed'
+  ) {
     stages.push({
       key: 'payment',
       label: 'Payment Pending',
@@ -181,7 +279,9 @@ export function computeBookingTimeline(
       timestamp: findEventTimestamp(events, 'confirmed'),
       description: isRenter
         ? "You're all set! Your billboard rental is confirmed. You can review your booking details below."
-        : 'Payment received — the booking is confirmed.',
+        : proofPostedAt
+          ? 'Payment received — the booking is confirmed.'
+          : 'Payment received — the booking is confirmed. Once the creative is up, upload proof of posting.',
       actor: 'platform',
     })
   } else if (booking.status === 'active' || booking.status === 'completed') {
@@ -192,20 +292,46 @@ export function computeBookingTimeline(
       timestamp: findEventTimestamp(events, 'confirmed'),
     })
   } else {
-    stages.push({ key: 'confirmed', label: 'Booking Confirmed', state: 'upcoming' })
+    stages.push({
+      key: 'confirmed',
+      label: 'Booking Confirmed',
+      state: 'upcoming',
+    })
+  }
+
+  // --- Posted (proof of posting, contract 7) ---
+  // Complete once the owner has shared at least one photo. Owners can post
+  // proof while the booking is confirmed or active, so until then the step
+  // stays upcoming; completed bookings from before proof existed skip it.
+  if (proofPostedAt) {
+    stages.push({
+      key: 'posted',
+      label: 'Posted',
+      state: 'completed',
+      timestamp: proofPostedAt,
+      proofBookingId: booking.id,
+    })
+  } else if (booking.status !== 'completed') {
+    stages.push({ key: 'posted', label: 'Posted', state: 'upcoming' })
   }
 
   // --- Campaign Active ---
   if (booking.status === 'active') {
+    const proofHint = proofPostedAt
+      ? ''
+      : isRenter
+        ? " The owner hasn't shared proof of posting yet — we'll notify you when they do."
+        : ' Upload proof of posting so the renter can see their ad is up.'
     stages.push({
       key: 'active',
       label: 'Campaign Active',
       state: 'current',
       timestamp: findEventTimestamp(events, 'active'),
-      description: isRenter
-        ? 'Your rental period has started.'
-        : 'This rental is currently running.',
-      actor: 'platform',
+      description:
+        (isRenter
+          ? 'Your rental period has started.'
+          : 'This rental is currently running.') + proofHint,
+      actor: proofPostedAt || isRenter ? 'platform' : 'owner',
     })
   } else if (booking.status === 'completed') {
     stages.push({
@@ -231,7 +357,11 @@ export function computeBookingTimeline(
       actor: 'platform',
     })
   } else {
-    stages.push({ key: 'completed', label: 'Rental Completed', state: 'upcoming' })
+    stages.push({
+      key: 'completed',
+      label: 'Rental Completed',
+      state: 'upcoming',
+    })
   }
 
   return stages
