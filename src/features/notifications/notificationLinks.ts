@@ -1,7 +1,8 @@
 import type { Notification, UserRole } from '@/types'
 
 // Notification types whose ref_id is a booking id (see trg_booking_notify,
-// request_booking_documents, the reminder cron and the payment RPCs).
+// request_booking_documents, add_proof_of_posting, the reminder cron and the
+// payment RPCs).
 const BOOKING_REF_TYPES = new Set([
   'booking_requested',
   'booking_approved',
@@ -15,6 +16,7 @@ const BOOKING_REF_TYPES = new Set([
   'payment_reminder',
   'documents_requested',
   'rental_starting_soon',
+  'proof_of_posting',
 ])
 
 // Where clicking a notification should take the viewer, or null when there's

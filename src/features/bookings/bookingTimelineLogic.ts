@@ -16,6 +16,9 @@ export interface TimelineStage {
   timestamp?: string
   description?: string
   actor?: TimelineActor
+  // Set on a completed "Posted" stage: BookingTimeline shows that booking's
+  // proof-of-posting photos under the steps.
+  proofBookingId?: string
 }
 
 export interface TimelineContext {
@@ -51,6 +54,16 @@ export function getAwaitingDocumentsInfo(events: BookingEvent[]): AwaitingDocume
   return { active: !resolved, note: lastRequest.message, requestedAt: lastRequest.createdAt }
 }
 
+// When the owner first shared proof of posting (add_proof_of_posting logs a
+// 'proof_posted' event per photo), or undefined if there is none yet.
+export function getProofPostedAt(events: BookingEvent[]): string | undefined {
+  let first: string | undefined
+  for (const e of events) {
+    if (e.eventType === 'proof_posted' && (!first || e.createdAt < first)) first = e.createdAt
+  }
+  return first
+}
+
 export function computeBookingTimeline(
   booking: Booking,
   events: BookingEvent[],
@@ -61,6 +74,7 @@ export function computeBookingTimeline(
   const isRenter = ctx.viewerRole === 'renter'
   const status = booking.status as AnyBookingStatus
   const paymentState = ctx.paymentState ?? 'none'
+  const proofPostedAt = getProofPostedAt(events)
 
   stages.push({
     key: 'submitted',
@@ -230,7 +244,9 @@ export function computeBookingTimeline(
       timestamp: findEventTimestamp(events, 'confirmed'),
       description: isRenter
         ? "You're all set! Your billboard rental is confirmed. You can review your booking details below."
-        : 'Payment received — the booking is confirmed.',
+        : proofPostedAt
+          ? 'Payment received — the booking is confirmed.'
+          : 'Payment received — the booking is confirmed. Once the creative is up, upload proof of posting.',
       actor: 'platform',
     })
   } else if (booking.status === 'active' || booking.status === 'completed') {
@@ -244,17 +260,39 @@ export function computeBookingTimeline(
     stages.push({ key: 'confirmed', label: 'Booking Confirmed', state: 'upcoming' })
   }
 
+  // --- Posted (proof of posting, contract 7) ---
+  // Complete once the owner has shared at least one photo. Owners can post
+  // proof while the booking is confirmed or active, so until then the step
+  // stays upcoming; completed bookings from before proof existed skip it.
+  if (proofPostedAt) {
+    stages.push({
+      key: 'posted',
+      label: 'Posted',
+      state: 'completed',
+      timestamp: proofPostedAt,
+      proofBookingId: booking.id,
+    })
+  } else if (booking.status !== 'completed') {
+    stages.push({ key: 'posted', label: 'Posted', state: 'upcoming' })
+  }
+
   // --- Campaign Active ---
   if (booking.status === 'active') {
+    const proofHint = proofPostedAt
+      ? ''
+      : isRenter
+        ? " The owner hasn't shared proof of posting yet — we'll notify you when they do."
+        : ' Upload proof of posting so the renter can see their ad is up.'
     stages.push({
       key: 'active',
       label: 'Campaign Active',
       state: 'current',
       timestamp: findEventTimestamp(events, 'active'),
-      description: isRenter
-        ? 'Your rental period has started.'
-        : 'This rental is currently running.',
-      actor: 'platform',
+      description:
+        (isRenter
+          ? 'Your rental period has started.'
+          : 'This rental is currently running.') + proofHint,
+      actor: proofPostedAt || isRenter ? 'platform' : 'owner',
     })
   } else if (booking.status === 'completed') {
     stages.push({

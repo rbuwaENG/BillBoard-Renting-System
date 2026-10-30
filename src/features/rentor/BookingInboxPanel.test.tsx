@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { createSupabaseMock } from '@/test/supabaseMock'
@@ -236,5 +237,28 @@ describe('BookingInboxPanel', () => {
     expect(
       screen.queryByText(/no booking requests yet/i),
     ).not.toBeInTheDocument()
+  })
+
+  it('offers proof-of-posting upload only for confirmed/active bookings', () => {
+    setup(vi.fn(), {
+      requests: [
+        { ...REQUEST, id: 'a', billboardTitle: 'Pending Board' },
+        { ...REQUEST, id: 'b', billboardTitle: 'Live Board', status: 'active' },
+      ],
+    })
+    const queryClient = new QueryClient()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BookingInboxPanel />
+      </QueryClientProvider>,
+    )
+    const buttons = screen.getAllByRole('button', {
+      name: /upload proof of posting/i,
+    })
+    expect(buttons).toHaveLength(1)
+    fireEvent.click(buttons[0])
+    expect(
+      screen.getByRole('button', { name: /close proof of posting/i }),
+    ).toHaveAttribute('aria-expanded', 'true')
   })
 })

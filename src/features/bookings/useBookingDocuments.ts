@@ -1,8 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import { uploadBookingCreative } from './creativeStorage'
+import { uploadBookingCreative, uploadProofOfPosting } from './creativeStorage'
 
-export type BookingDocumentKind = 'creative' | 'brief' | 'logo' | 'other'
+export type BookingDocumentKind =
+  | 'creative'
+  | 'brief'
+  | 'logo'
+  | 'other'
+  | 'proof_of_posting'
+
+// add_proof_of_posting (0033) caps proof photos per booking.
+export const MAX_PROOF_PHOTOS = 10
 
 export interface BookingDocument {
   id: string
@@ -68,7 +76,7 @@ export function useAddBookingDocument() {
     }: {
       bookingId: string
       file: File
-      kind?: BookingDocumentKind
+      kind?: Exclude<BookingDocumentKind, 'proof_of_posting'>
     }) => {
       const path = await uploadBookingCreative(file, bookingId)
       const { error } = await supabase.rpc('add_booking_document', {
@@ -81,6 +89,31 @@ export function useAddBookingDocument() {
       if (error) throw error
     },
     onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['booking-documents', vars.bookingId] })
+      qc.invalidateQueries({ queryKey: ['booking-events', vars.bookingId] })
+    },
+  })
+}
+
+// Owner-only: uploads one proof-of-posting photo (confirmed/active bookings)
+// and registers it via add_proof_of_posting, which also notifies the renter
+// and logs a 'proof_posted' booking event. Callers show errors inline.
+export function useAddProofOfPosting() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ bookingId, file }: { bookingId: string; file: File }) => {
+      const path = await uploadProofOfPosting(file, bookingId)
+      const { error } = await supabase.rpc('add_proof_of_posting', {
+        p_booking_id: bookingId,
+        p_path: path,
+        p_name: file.name,
+        p_size: file.size,
+        p_mime: file.type,
+      })
+      if (error) throw error
+    },
+    meta: { suppressErrorToast: true },
+    onSettled: (_data, _error, vars) => {
       qc.invalidateQueries({ queryKey: ['booking-documents', vars.bookingId] })
       qc.invalidateQueries({ queryKey: ['booking-events', vars.bookingId] })
     },

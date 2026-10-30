@@ -25,6 +25,11 @@ export const DOCUMENTS_LOCKED_STATUSES: ReadonlySet<AnyBookingStatus> =
 export const CONTACT_UNLOCKED_STATUSES: ReadonlySet<AnyBookingStatus> =
   new Set<AnyBookingStatus>(['confirmed', 'active', 'completed'])
 
+// The owner may share proof of posting while the booking is paid and not yet
+// over (add_proof_of_posting, 0033).
+export const PROOF_UPLOAD_STATUSES: ReadonlySet<AnyBookingStatus> =
+  new Set<AnyBookingStatus>(['confirmed', 'active'])
+
 export function isInProgress(status: AnyBookingStatus): boolean {
   return IN_PROGRESS_STATUSES.has(status)
 }

@@ -4,7 +4,10 @@ import { uniqueChannelName } from '@/lib/realtime'
 import { supabase } from '@/lib/supabase'
 
 export type BookingEventType =
-  'status_change' | 'document_requested' | 'document_uploaded'
+  | 'status_change'
+  | 'document_requested'
+  | 'document_uploaded'
+  | 'proof_posted'
 
 export interface BookingEvent {
   id: string

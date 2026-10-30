@@ -1,5 +1,6 @@
 import {
   Ban,
+  Camera,
   CheckCircle2,
   CreditCard,
   Eye,
@@ -15,6 +16,7 @@ import type { ReactNode } from 'react'
 import { Button } from '@/components'
 import { cn } from '@/lib/utils'
 import type { TimelineActor, TimelineStage, TimelineStageState } from './bookingTimelineLogic'
+import { ProofOfPostingGallery } from './ProofOfPostingGallery'
 
 const STAGE_ICON: Record<string, LucideIcon> = {
   submitted: Send,
@@ -22,6 +24,7 @@ const STAGE_ICON: Record<string, LucideIcon> = {
   'awaiting-info': FileText,
   payment: CreditCard,
   confirmed: CheckCircle2,
+  posted: Camera,
   active: Radio,
   completed: PartyPopper,
   declined: XCircle,
@@ -79,6 +82,7 @@ export function BookingTimeline({
   secondaryActions,
 }: BookingTimelineProps) {
   const current = stages.find((s) => s.state === 'current' || s.state === 'blocked')
+  const proofBookingId = stages.find((s) => s.key === 'posted' && s.proofBookingId)?.proofBookingId
 
   return (
     <div className="space-y-5">
@@ -125,6 +129,8 @@ export function BookingTimeline({
           )
         })}
       </div>
+
+      {proofBookingId && <ProofOfPostingGallery bookingId={proofBookingId} />}
 
       {current?.description && (
         <div

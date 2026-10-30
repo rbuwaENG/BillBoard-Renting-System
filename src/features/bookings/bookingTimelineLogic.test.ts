@@ -164,3 +164,56 @@ describe('getAwaitingDocumentsInfo', () => {
     expect(getAwaitingDocumentsInfo(events).active).toBe(true)
   })
 })
+
+describe('computeBookingTimeline — Posted step (proof of posting)', () => {
+  const proof = makeEvent({
+    id: 'event-proof',
+    eventType: 'proof_posted',
+    message: 'front.jpg',
+    createdAt: '2026-11-01T09:00:00.000Z',
+  })
+
+  it('is upcoming while a confirmed booking has no proof yet', () => {
+    const stages = computeBookingTimeline(makeBooking({ status: 'confirmed' }), [], CTX)
+    const keys = stages.map((s) => s.key)
+    expect(keys.indexOf('posted')).toBe(keys.indexOf('confirmed') + 1)
+    expect(stageByKey(stages, 'posted')?.state).toBe('upcoming')
+    expect(stageByKey(stages, 'posted')?.proofBookingId).toBeUndefined()
+  })
+
+  it('is complete once proof exists, and carries the booking id for the photos', () => {
+    const later = makeEvent({ ...proof, id: 'event-proof-2', createdAt: '2026-11-02T09:00:00.000Z' })
+    const stages = computeBookingTimeline(makeBooking({ status: 'confirmed' }), [later, proof], CTX)
+    expect(stageByKey(stages, 'posted')).toMatchObject({
+      state: 'completed',
+      timestamp: proof.createdAt,
+      proofBookingId: 'booking-1',
+    })
+    expect(stageByKey(stages, 'confirmed')?.state).toBe('current')
+  })
+
+  it('asks the owner for proof while an active booking has none', () => {
+    const booking = makeBooking({ status: 'active' })
+    const owner = computeBookingTimeline(booking, [], { ...CTX, viewerRole: 'owner' })
+    expect(stageByKey(owner, 'posted')?.state).toBe('upcoming')
+    expect(stageByKey(owner, 'active')).toMatchObject({ state: 'current', actor: 'owner' })
+    expect(stageByKey(owner, 'active')?.description).toMatch(/upload proof of posting/i)
+
+    const renter = computeBookingTimeline(booking, [], CTX)
+    expect(stageByKey(renter, 'active')?.description).toMatch(/hasn't shared proof of posting/)
+
+    const withProof = computeBookingTimeline(booking, [proof], { ...CTX, viewerRole: 'owner' })
+    expect(stageByKey(withProof, 'active')?.actor).toBe('platform')
+    expect(stageByKey(withProof, 'active')?.description).not.toMatch(/proof/i)
+  })
+
+  it('is skipped for completed bookings that never had proof', () => {
+    expect(
+      stageByKey(computeBookingTimeline(makeBooking({ status: 'completed' }), [], CTX), 'posted'),
+    ).toBeUndefined()
+    expect(
+      stageByKey(computeBookingTimeline(makeBooking({ status: 'completed' }), [proof], CTX), 'posted')
+        ?.state,
+    ).toBe('completed')
+  })
+})

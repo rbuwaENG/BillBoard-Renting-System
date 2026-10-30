@@ -62,6 +62,7 @@ const ANON_FUNCTIONS = [
 const AUTHENTICATED_FUNCTIONS = [
   ...ANON_FUNCTIONS,
   'add_booking_document(uuid,text,text,bigint,text)',
+  'add_proof_of_posting(uuid,text,text,bigint,text)', // 0033
   'admin_cancel_payout(uuid)', // 0031
   'admin_confirm_payment(uuid,numeric,text,text)',
   'admin_count_users(text)', // 0030
