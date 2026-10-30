@@ -9,7 +9,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<NonNullable<ButtonProps['variant']>, string> = {
-  primary: 'bg-ink text-paper hover:bg-accent dark:bg-paper dark:text-ink dark:hover:bg-accent dark:hover:text-paper',
+  primary:
+    'bg-ink text-paper hover:bg-accent dark:bg-paper dark:text-ink dark:hover:bg-accent dark:hover:text-paper',
   secondary:
     'border border-ink/15 text-ink hover:border-ink/40 dark:border-paper/20 dark:text-paper dark:hover:border-paper/50',
   ghost: 'text-ink/60 hover:text-ink dark:text-paper/60 dark:hover:text-paper',
@@ -34,7 +35,11 @@ export function Button({
       className={cn(
         'inline-flex items-center justify-center gap-2 rounded-none font-mono font-medium uppercase tracking-wide transition-colors',
         'clip-corner',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-40',
+        // `clip-corner` (clip-path) clips anything painted outside the box —
+        // an outer ring or outline would be invisible — so the focus
+        // indicator is an inset outline in the button's own text colour,
+        // which contrasts with every variant's background.
+        'focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-current disabled:cursor-not-allowed disabled:opacity-40',
         variantClasses[variant],
         sizeClasses[size],
         className,

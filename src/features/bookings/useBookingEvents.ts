@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { uniqueChannelName } from '@/lib/realtime'
 import { supabase } from '@/lib/supabase'
 
-export type BookingEventType = 'status_change' | 'document_requested' | 'document_uploaded'
+export type BookingEventType =
+  'status_change' | 'document_requested' | 'document_uploaded'
 
 export interface BookingEvent {
   id: string
@@ -48,7 +50,7 @@ export function useBookingEvents(bookingId: string | null | undefined) {
   useEffect(() => {
     if (!bookingId) return
     const channel = supabase
-      .channel(`booking-events:${bookingId}`)
+      .channel(uniqueChannelName(`booking-events:${bookingId}`))
       .on(
         'postgres_changes',
         {

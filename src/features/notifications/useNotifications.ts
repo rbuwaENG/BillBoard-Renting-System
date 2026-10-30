@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { uniqueChannelName } from '@/lib/realtime'
 import { supabase } from '@/lib/supabase'
 import type { Notification } from '@/types'
 
@@ -28,30 +29,34 @@ function toNotification(row: NotificationRow): Notification {
 
 export function useMyNotifications() {
   const { user } = useAuth()
+  // Depend on the id, not the profile object — the object is replaced on
+  // every auth state change (e.g. token refresh), which would otherwise tear
+  // the subscription down and rebuild it.
+  const uid = user?.uid
   const qc = useQueryClient()
 
   useEffect(() => {
-    if (!user) return
+    if (!uid) return
     const channel = supabase
-      .channel(`notifications:${user.uid}`)
+      .channel(uniqueChannelName(`notifications:${uid}`))
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${user.uid}`,
+          filter: `user_id=eq.${uid}`,
         },
-        () => qc.invalidateQueries({ queryKey: ['notifications', user.uid] }),
+        () => qc.invalidateQueries({ queryKey: ['notifications', uid] }),
       )
       .subscribe()
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [user, qc])
+  }, [uid, qc])
 
   return useQuery({
-    queryKey: ['notifications', user?.uid],
+    queryKey: ['notifications', uid],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('notifications')
@@ -61,13 +66,8 @@ export function useMyNotifications() {
       if (error) throw error
       return (data as NotificationRow[]).map(toNotification)
     },
-    enabled: !!user,
+    enabled: !!uid,
   })
-}
-
-export function useUnreadNotificationCount() {
-  const { data } = useMyNotifications()
-  return (data ?? []).filter((n) => !n.read).length
 }
 
 export function useMarkNotificationsRead() {
@@ -82,6 +82,7 @@ export function useMarkNotificationsRead() {
         .in('id', ids)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications', user?.uid] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ['notifications', user?.uid] }),
   })
 }

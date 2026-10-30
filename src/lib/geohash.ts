@@ -1,12 +1,7 @@
-// TODO(phase 4 - Public browse & map, PLAN.md section 3/8): compute and query
-// geohash bounding boxes (e.g. via `geofire-common`) once billboards live in
-// Firestore, so "near me" can be a server-side query instead of the
-// client-side haversine filter below (fine at 7 mock billboards, not at
-// marketplace scale).
-export function distanceKm(
-  a: [number, number],
-  b: [number, number],
-): number {
+// Great-circle distance (haversine) in km. Used for client-side distance
+// labels/sorting; server-side "near me" queries go through the PostGIS-backed
+// `billboards_near` RPC instead.
+export function distanceKm(a: [number, number], b: [number, number]): number {
   const R = 6371
   const [lat1, lng1] = a
   const [lat2, lng2] = b
