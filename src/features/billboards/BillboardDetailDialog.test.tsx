@@ -19,8 +19,6 @@ const BILLBOARD: BillboardWithDetails = {
   id: 'billboard-1',
   ownerId: 'owner-1',
   ownerName: 'Oscar Owner',
-  ownerPhone: '',
-  ownerEmail: '',
   title: 'Main Street Board',
   description: 'Big and bright',
   category: 'Digital',

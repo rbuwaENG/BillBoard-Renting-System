@@ -55,14 +55,19 @@ function canExecute(q: Queryable, role: string, fn: string) {
 const ANON_FUNCTIONS = [
   'billboards_near(double precision,double precision,double precision)',
   'current_profile_role()',
+  'get_billboard_booked_ranges(uuid)', // 0032
   'is_active_user()',
   'is_admin()',
 ]
 const AUTHENTICATED_FUNCTIONS = [
   ...ANON_FUNCTIONS,
   'add_booking_document(uuid,text,text,bigint,text)',
+  'admin_cancel_payout(uuid)', // 0031
   'admin_confirm_payment(uuid,numeric,text,text)',
+  'admin_count_users(text)', // 0030
   'admin_create_payout(uuid,uuid[],date)',
+  'admin_list_users(text,integer,integer)', // 0030
+  'admin_reject_payment(uuid,text)', // 0031
   'admin_release_payout(uuid)',
   'admin_set_billboard_status(uuid,text,text)',
   'advance_booking_lifecycle()',
@@ -70,9 +75,11 @@ const AUTHENTICATED_FUNCTIONS = [
   'attach_booking_creative(uuid,text)',
   'cancel_booking(uuid)',
   'create_campaign(text,date,date,uuid[])',
+  'get_booking_contact(uuid)', // 0030
+  'get_my_profile()', // 0030
   'get_or_create_chat_thread(uuid)',
   'remove_booking_document(uuid)',
-  'renter_pay_booking(uuid)',
+  'renter_submit_payment(uuid,text)', // 0031 (renter_pay_booking dropped)
   'request_booking(uuid,date,date,text)',
   'request_booking_documents(uuid,text)',
   'respond_to_booking(uuid,boolean,text)',
@@ -333,7 +340,9 @@ describe('null-safe guards in booking RPCs (0029)', () => {
       endDate: daysFromNow(31),
     })
     await db.query(
-      `update public.bookings set start_date = current_date where id = $1`,
+      // Move the whole range to today so it can't overlap the earlier
+      // tests' bookings on this billboard (bookings_no_overlap, 0032).
+      `update public.bookings set start_date = current_date, end_date = current_date where id = $1`,
       [booking.id],
     )
     await expect(
