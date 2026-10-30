@@ -39,8 +39,9 @@ create index if not exists booking_documents_booking_kind_idx
   on public.booking_documents (booking_id, kind);
 
 -- ---------------------------------------------------------------------------
--- add_booking_document (latest: 0029) — renter only, unchanged except that a
--- renter can no longer file a document as proof of posting.
+-- add_booking_document (latest: 0029) — renter only, same signature. New:
+-- a renter can no longer file a document as proof of posting, the storage
+-- path must be inside `<booking_id>/` and the file size must be > 0.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.add_booking_document(
@@ -74,6 +75,17 @@ begin
   end if;
   if v_booking.status in ('rejected','cancelled','completed') then
     raise exception 'This booking can no longer accept documents';
+  end if;
+  -- The file must live in this booking's folder (the storage policies key
+  -- access off the first path segment) and be non-empty.
+  if p_storage_path is null
+     or left(p_storage_path, length(p_booking_id::text) + 1) <> p_booking_id::text || '/'
+     or length(p_storage_path) <= length(p_booking_id::text) + 1
+     or position('..' in p_storage_path) > 0 then
+    raise exception 'Invalid storage path for this booking';
+  end if;
+  if p_file_size is null or p_file_size <= 0 then
+    raise exception 'File size must be greater than zero';
   end if;
 
   insert into public.booking_documents (booking_id, uploaded_by, storage_path, file_name, file_size, kind)

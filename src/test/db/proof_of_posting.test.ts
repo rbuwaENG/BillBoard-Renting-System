@@ -214,6 +214,32 @@ describe('add_proof_of_posting (0033)', () => {
     expect(doc.kind).toBe('brief')
   })
 
+  it('add_booking_document requires a path inside the booking folder and a size > 0', async () => {
+    const booking = await bookingIn(db, s, 'confirmed')
+    const add = (path: string, size: number) =>
+      asUser(db, s.renter.id, (tx) =>
+        rpc(tx, 'add_booking_document', {
+          p_booking_id: booking.id,
+          p_storage_path: path,
+          p_file_name: 'f.pdf',
+          p_file_size: size,
+        }),
+      )
+    for (const path of [
+      'f.pdf',
+      `${crypto.randomUUID()}/f.pdf`,
+      `${booking.id}/`,
+      `${booking.id}/../other/f.pdf`,
+    ]) {
+      await expect(add(path, 10), path).rejects.toThrow(
+        'Invalid storage path for this booking',
+      )
+    }
+    await expect(add(`${booking.id}/f.pdf`, 0)).rejects.toThrow(
+      'File size must be greater than zero',
+    )
+  })
+
   it('validates MIME type, path, size and name', async () => {
     const booking = await bookingIn(db, s, 'confirmed')
     await expect(

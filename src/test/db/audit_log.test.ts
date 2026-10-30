@@ -389,4 +389,45 @@ describe('suspended admins (0034 is_admin fix)', () => {
     )
     expect(log.rows).toEqual([])
   })
+
+  it('cannot un-suspend themselves', async () => {
+    await asUser(db, suspendedAdmin, (tx) =>
+      tx.query(`update public.profiles set status = 'active' where id = $1`, [
+        suspendedAdmin,
+      ]),
+    )
+    const { rows } = await db.query<{ status: string; role: string }>(
+      `select status, role from public.profiles where id = $1`,
+      [suspendedAdmin],
+    )
+    // profiles_update_own still matches (own row), but
+    // protect_profile_role_status resets role/status for non-admins.
+    expect(rows[0]).toEqual({ status: 'suspended', role: 'admin' })
+    // Only the fixture's own (system) promotion/suspension was logged.
+    const { rows: audit } = await db.query<{ actor_id: string | null }>(
+      `select actor_id from public.admin_audit_log where entity_id = $1`,
+      [suspendedAdmin],
+    )
+    expect(audit).toEqual([{ actor_id: null }])
+  })
+
+  it('cannot read payment gateway settings or update platform settings', async () => {
+    const gateway = await asUser(db, suspendedAdmin, (tx) =>
+      tx.query(`select secret_key from public.payment_gateway_settings`),
+    )
+    expect(gateway.rows).toEqual([])
+    const active = await asUser(db, s.admin.id, (tx) =>
+      tx.query(`select secret_key from public.payment_gateway_settings`),
+    )
+    expect(active.rows).toHaveLength(1)
+
+    const update = await asUser(db, suspendedAdmin, (tx) =>
+      tx.query(`update public.platform_settings set platform_fee_percent = 50`),
+    )
+    expect(update.affectedRows).toBe(0)
+    const { rows } = await db.query<{ platform_fee_percent: string }>(
+      `select platform_fee_percent from public.platform_settings`,
+    )
+    expect(Number(rows[0].platform_fee_percent)).not.toBe(50)
+  })
 })
