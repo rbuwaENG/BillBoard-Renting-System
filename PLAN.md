@@ -130,12 +130,22 @@ notifications
 
 ```
 pending_owner_review --(rentor rejects)--> rejected
-pending_owner_review --(rentor approves)--> payment_pending
-payment_pending --(stripe webhook success)--> confirmed
-confirmed --(startDate reached)--> active            [scheduled/cron or on-read check]
+pending_owner_review --(rentor approves, before start date)--> payment_pending
+pending_owner_review --(no response within 72h)--> expired
+payment_pending --(renter submits "I've paid" -> payment 'pending')--> payment_pending
+payment_pending --(admin confirms payment, amount = price_quoted)--> confirmed
+payment_pending --(admin rejects payment)--> payment_pending   [renter resubmits]
+payment_pending --(no payment within 72h of approval/rejection)--> expired
+confirmed --(startDate reached, platform timezone)--> active      [pg_cron + on-demand RPC]
+active --(owner uploads proof of posting)--> "Posted" timeline step
 active --(endDate passed)--> completed --> (renter can leave review)
-any non-terminal state --(renter/rentor cancels, per policy)--> cancelled
+pending/payment_pending without a submitted payment --(renter cancels)--> cancelled
 ```
+
+Overlapping bookings for the same billboard are rejected by an exclusion
+constraint over `pending_owner_review`/`payment_pending`/`confirmed`/`active`
+(0032). Only bookings with an **admin-confirmed** succeeded payment are payable
+to owners.
 
 ---
 
@@ -179,13 +189,18 @@ supabase/
 11. **Testing & hardening** — Vitest coverage on the new hooks/components (reviews, payments, payouts, chat, campaigns, creative upload, booking inbox) via a reusable Supabase client mock. *(RLS/pgTAP-level DB tests still not attempted — see Open Items)*
 12. **CI/CD & deploy** — GitHub Actions pipeline (lint/test/build), deployed to Vercel.
 
+13. **Hardening round 1** — security/integrity migrations 0029–0035 (function privileges, null-safe auth checks, billboard field protection, profile PII column grants, renter-submits/admin-confirms payments, exclusion constraint + expiry, proof of posting, admin audit log, review fixes), an in-process Postgres test harness (`npm run test:db`, PGlite) with RLS/RPC tests, route code-splitting + error boundaries, offline unit tests, and renter/owner/admin UX fixes (gallery, availability calendar, password reset, shareable billboard pages). ✅ done.
+
 Additionally, beyond the original 12 phases: **booking lifecycle automation** (`confirmed`→`active`→`completed` via a `pg_cron` job + on-demand RPC fallback) and a **payout mechanism** (admin approves + schedules a release date per rentor; `payouts`/`payout_items` tables; auto-release on the scheduled date via the same cron job, or a manual "Release now") are both done — see `supabase/migrations/0015_lifecycle_automation.sql` and `0016_payouts.sql`.
 
 ---
 
 ## 8. Open Items to Revisit Later
 
-- Real payment gateway (Stripe or similar) to replace the admin-manual confirmation, if/when actual card processing is needed — the `payments` table already has the legacy `stripe_payment_intent_id` column reserved for this.
+- Real payment gateway (Stripe or similar) to replace the renter-submits / admin-confirms manual flow, if/when actual card processing is needed — the `payments` table already has the legacy `stripe_payment_intent_id` column reserved for this. The gateway secret currently lives in `payment_gateway_settings` (admin-only) and should move to Vault / Edge Function secrets before a gateway goes live.
 - Stripe Connect (or similar) as an alternative to the current manual admin-scheduled payout model, if automated bank transfers become necessary.
-- Availability model: simple date-range overlap check vs. full calendar table — currently a simple overlap check inside `request_booking`, upgrade if needed.
-- RLS/pgTAP-level database tests (currently only frontend hooks/components are covered by Vitest).
+- Availability: bookings are protected by an exclusion constraint and renters see booked days in a calendar; the browse "Available between" filter checks only the first 50 results client-side — a bulk `billboards_available_between(from, to)` RPC would remove that cap.
+- Server-side aggregation/paging RPCs for admin analytics and large tables (lists page with `.range()`, but analytics still reads whole tables).
+- Generated Supabase types (`supabase gen types typescript`) to replace the hand-written row types — needs the Supabase CLI against the project.
+- Chat unread tracking (needs per-participant `last_read_at` columns), invoices/receipts, disputes/refunds (`refunded` status exists but has no flow), and cleanup of orphaned storage objects when images are removed from a listing.
+- The PGlite harness is close to, but not exactly, Supabase (no PostgREST/GoTrue/Storage API, single connection, migrations run as superuser) — verify key flows on a Supabase dev project after applying migrations.
