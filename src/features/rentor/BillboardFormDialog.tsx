@@ -15,7 +15,14 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import { lookupDistrict, trafficMapUrl } from '@/lib/geocode'
 import type { TrafficLevel } from '@/types'
+import { BillboardImageManager } from './BillboardImageManager'
 import { errorMessage } from './errors'
+import {
+  markUploaded,
+  storedItems,
+  useRevokeRemovedPreviews,
+  type ImageItem,
+} from './imageManager'
 import { LocationPickerMap } from './LocationPickerMap'
 import { validatePricingTiers } from './pricingTierValidation'
 import { uploadBillboardImages } from './useRentorBillboards'
@@ -256,8 +263,17 @@ export function BillboardFormDialog({
   const { data: currencySetting } = useCurrencySetting()
   const formatPrice = useFormatPrice()
   const [form, setForm] = useState<RentorBillboardInput>(EMPTY)
-  const [newFiles, setNewFiles] = useState<File[]>([])
-  const [fileInputKey, setFileInputKey] = useState(0)
+  // The listing's ordered photos (first = cover); the source of truth for
+  // `images` on save. New files are uploaded on submit and swapped in place
+  // for their URLs, so a failed save retries without re-uploading.
+  const [imageItems, setImageItems] = useState<ImageItem[]>([])
+  useRevokeRemovedPreviews(imageItems)
+
+  // Kept apart from the form reset below so a taxonomy refetch can't wipe
+  // freshly picked photos. Closing drops (and revokes) unsaved previews.
+  useEffect(() => {
+    setImageItems(open ? storedItems(editing?.images ?? []) : [])
+  }, [open, editing])
   const [recenterSignal, setRecenterSignal] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -270,8 +286,6 @@ export function BillboardFormDialog({
 
   useEffect(() => {
     if (!open) return
-    setNewFiles([])
-    setFileInputKey((k) => k + 1)
     setSubmitError(null)
     if (editing) {
       setForm({
@@ -368,17 +382,20 @@ export function BillboardFormDialog({
     }
     if (!user || salePriceError) return
 
-    let images = form.images
-    if (newFiles.length > 0) {
+    let items = imageItems
+    const pending = items.filter((i) => i.kind === 'new')
+    if (pending.length > 0) {
       setUploading(true)
       try {
-        const uploaded = await uploadBillboardImages(newFiles, user.uid)
-        images = [...form.images, ...uploaded]
-        // Keep the uploaded URLs even if the save below fails, so a retry
-        // doesn't upload the same files again.
-        setForm((f) => ({ ...f, images }))
-        setNewFiles([])
-        setFileInputKey((k) => k + 1)
+        // One at a time, swapping each into place as soon as it's stored:
+        // the uploaded URLs are kept even if a later upload or the save
+        // fails, so a retry doesn't upload the same files again.
+        for (const item of pending) {
+          const [url] = await uploadBillboardImages([item.file], user.uid)
+          items = markUploaded(items, item.key, url)
+          // Functional update so edits made meanwhile (reorder/remove) win.
+          setImageItems((current) => markUploaded(current, item.key, url))
+        }
       } catch (err) {
         setSubmitError(`Image upload failed: ${errorMessage(err)}`)
         return
@@ -386,6 +403,7 @@ export function BillboardFormDialog({
         setUploading(false)
       }
     }
+    const images = items.flatMap((i) => (i.kind === 'stored' ? [i.url] : []))
 
     setSaving(true)
     try {
@@ -641,25 +659,16 @@ export function BillboardFormDialog({
 
               {editing && <PricingTiersEditor billboardId={editing.id} />}
 
-              <label className="block">
-                <span className={fieldLabelClass()}>Images</span>
-                <input
-                  key={fileInputKey}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) =>
-                    setNewFiles(Array.from(e.target.files ?? []))
-                  }
-                  className="w-full text-xs text-ink/60 dark:text-paper/60"
+              <div>
+                <span className={fieldLabelClass()}>
+                  Photos ({imageItems.length})
+                </span>
+                <BillboardImageManager
+                  items={imageItems}
+                  onChange={setImageItems}
+                  disabled={busy}
                 />
-                {form.images.length > 0 && (
-                  <p className="mt-1 font-mono text-[11px] text-ink/50 dark:text-paper/50">
-                    {form.images.length} existing image
-                    {form.images.length !== 1 ? 's' : ''}
-                  </p>
-                )}
-              </label>
+              </div>
             </div>
 
             <div className="border-t border-ink/10 p-5 dark:border-paper/15">

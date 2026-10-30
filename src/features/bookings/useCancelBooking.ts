@@ -10,6 +10,7 @@ export function useCancelBooking() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-bookings'] })
+      qc.invalidateQueries({ queryKey: ['booked-ranges'] })
       qc.invalidateQueries({ queryKey: ['owner-bookings'] })
     },
   })

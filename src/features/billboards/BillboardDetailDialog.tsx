@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Badge, BillboardMark, Button, FileDropzone, Tabs } from '@/components'
+import { Badge, Button, FileDropzone, Tabs } from '@/components'
 import { currentPath, loginPath } from '@/features/auth/redirect'
 import {
   BookingActivityHistory,
@@ -35,6 +35,13 @@ import {
   todayISO,
   validateDateRange,
 } from '@/features/bookings/dateRange'
+import { AvailabilityCalendar } from '@/features/bookings/AvailabilityCalendar'
+import {
+  OVERLAP_MESSAGE,
+  rangeOverlapsBooked,
+  type BookedRange,
+} from '@/features/bookings/availability'
+import { useBookedRanges } from '@/features/bookings/useBookedRanges'
 import { useBookingContact } from '@/features/bookings/useBookingContact'
 import { useRequestBooking } from '@/features/bookings/useRequestBooking'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
@@ -49,6 +56,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { distanceKm } from '@/lib/geohash'
 import { cn } from '@/lib/utils'
 import type { TrafficLevel } from '@/types'
+import { BillboardGallery } from './BillboardGallery'
 import { getDisplayPrice, resolveEffectivePricePerDay } from './pricing'
 import { RatingSummary } from './RatingSummary'
 import { usePricingTiers } from './usePricingTiers'
@@ -56,6 +64,7 @@ import { useDistrictProfile } from './useDistrictProfile'
 import type { BillboardWithDetails } from './useBillboards'
 
 const MAX_CREATIVE_BYTES = 10 * 1024 * 1024
+const NO_RANGES: BookedRange[] = []
 
 const TRAFFIC_LABEL: Record<TrafficLevel, string> = {
   light: 'Light',
@@ -205,8 +214,13 @@ function RequestBookingForm({
   const { data: tiers } = usePricingTiers(billboard.id)
   const formatPrice = useFormatPrice()
 
+  const booked = useBookedRanges(billboard.id)
+  const bookedRanges = booked.data ?? NO_RANGES
+
   const dateErrors = validateDateRange(startDate, endDate, today)
-  const datesInvalid = hasDateErrors(dateErrors)
+  // Re-checked here too: the ranges may arrive (or change) after a pick.
+  const overlapsBooking = rangeOverlapsBooked(startDate, endDate, bookedRanges)
+  const datesInvalid = hasDateErrors(dateErrors) || overlapsBooking
   const days = datesInvalid ? 0 : bookingDays(startDate, endDate)
   const rate =
     days > 0 ? resolveEffectivePricePerDay(billboard, days, tiers) : null
@@ -220,8 +234,13 @@ function RequestBookingForm({
         startDate,
         endDate,
       })
-    } catch {
-      return // surfaced via requestBooking.error below
+    } catch (err) {
+      // Someone else booked these dates in the meantime — refresh the
+      // calendar so the clash shows. The message itself renders below.
+      if (err instanceof Error && /overlap/i.test(err.message)) {
+        void booked.refetch()
+      }
+      return
     }
 
     let creativeWarning: string | null = null
@@ -248,44 +267,33 @@ function RequestBookingForm({
     <div className="space-y-4 border-t border-ink/10 pt-4 dark:border-paper/10">
       <span className={sectionLabelClass()}>Request booking</span>
 
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className="mb-1 block font-mono text-[11px] text-ink/50 uppercase dark:text-paper/50">
-            Start date
-          </span>
-          <input
-            type="date"
-            value={startDate}
-            min={today}
-            aria-invalid={!!dateErrors.start}
-            aria-describedby={
-              dateErrors.start ? 'request-start-error' : undefined
-            }
-            onChange={(e) => setStartDate(e.target.value)}
-            className="w-full border-b border-ink/20 bg-transparent py-1.5 text-sm focus:border-accent focus:outline-none dark:border-paper/20"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block font-mono text-[11px] text-ink/50 uppercase dark:text-paper/50">
-            End date
-          </span>
-          <input
-            type="date"
-            value={endDate}
-            min={startDate && startDate > today ? startDate : today}
-            aria-invalid={!!dateErrors.end}
-            aria-describedby={dateErrors.end ? 'request-end-error' : undefined}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="w-full border-b border-ink/20 bg-transparent py-1.5 text-sm focus:border-accent focus:outline-none dark:border-paper/20"
-          />
-        </label>
-      </div>
-      {(dateErrors.start || dateErrors.end) && (
-        <div className="space-y-1 text-xs text-brand-error">
-          {dateErrors.start && (
-            <p id="request-start-error">{dateErrors.start}</p>
-          )}
-          {dateErrors.end && <p id="request-end-error">{dateErrors.end}</p>}
+      <AvailabilityCalendar
+        label="Booking dates"
+        today={today}
+        value={{ startDate, endDate }}
+        onChange={(next) => {
+          setStartDate(next.startDate)
+          setEndDate(next.endDate)
+        }}
+        bookedRanges={bookedRanges}
+        notice={
+          booked.isLoading ? (
+            <span className="text-ink/50 dark:text-paper/50">
+              Loading availability…
+            </span>
+          ) : booked.isError ? (
+            <span className="text-ink/60 dark:text-paper/60">
+              Availability couldn't be loaded — you can still send a request;
+              dates are checked when it's submitted.
+            </span>
+          ) : null
+        }
+      />
+      {(dateErrors.start || dateErrors.end || overlapsBooking) && (
+        <div role="alert" className="space-y-1 text-xs text-brand-error">
+          {dateErrors.start && <p>{dateErrors.start}</p>}
+          {dateErrors.end && <p>{dateErrors.end}</p>}
+          {overlapsBooking && <p>{OVERLAP_MESSAGE}</p>}
         </div>
       )}
 
@@ -339,7 +347,7 @@ function RequestBookingForm({
         </p>
       )}
 
-      {requestBooking.isError && (
+      {requestBooking.isError && !overlapsBooking && (
         <p role="alert" className="text-xs text-brand-error">
           {(requestBooking.error as Error).message}
         </p>
@@ -750,21 +758,12 @@ export function BillboardDetailContent({
 
   return (
     <>
-      <div className="relative flex h-40 shrink-0 items-center justify-center overflow-hidden bg-paper-dim dark:bg-ink">
-        {billboard.images[0] ? (
-          <img
-            src={billboard.images[0]}
-            alt={billboard.title}
-            className="size-full object-cover"
-          />
-        ) : (
-          <BillboardMark className="size-14 text-ink/10 dark:text-paper/10" />
-        )}
+      <BillboardGallery images={billboard.images} title={billboard.title}>
         <span className="absolute top-3 left-3 bg-ink px-2 py-1 font-mono text-[11px] tracking-widest text-paper uppercase dark:bg-paper dark:text-ink">
           {billboard.category}
         </span>
         {closeButton}
-      </div>
+      </BillboardGallery>
 
       <div className="flex-1 space-y-5 p-5 sm:p-6">
         <div>
