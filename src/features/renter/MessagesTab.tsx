@@ -4,13 +4,20 @@ import { BillboardMark, Button, Card } from '@/components'
 import { useBillboards } from '@/features/billboards/useBillboards'
 import { ChatPanel } from '@/features/chat/ChatPanel'
 import { useMyChatThreads, useStartChatThread } from '@/features/chat/useChat'
+import { ListState } from './ListState'
 import { useMyBookings } from './useMyBookings'
 
 export function MessagesTab() {
   const { data: billboardsData } = useBillboards()
   const billboards = billboardsData ?? []
   const { data: myBookings } = useMyBookings()
-  const { data: threadsData } = useMyChatThreads()
+  const {
+    data: threadsData,
+    isLoading: threadsLoading,
+    isError: threadsError,
+    error: threadsErrorValue,
+    refetch: refetchThreads,
+  } = useMyChatThreads()
   const threads = threadsData ?? []
   const [activeThread, setActiveThread] = useState<
     { id: string; title: string } | null
@@ -38,12 +45,17 @@ export function MessagesTab() {
         <h3 className="font-display text-lg font-semibold tracking-tight">
           Conversations
         </h3>
-        {threads.length === 0 ? (
-          <p className="mt-3 text-sm text-ink/40 dark:text-paper/40">
-            No conversations yet — message an owner from a billboard's
-            details, or start one below.
-          </p>
-        ) : (
+        <ListState
+          isLoading={threadsLoading}
+          isError={threadsError}
+          error={threadsErrorValue}
+          isEmpty={threads.length === 0}
+          loadingText="Loading conversations…"
+          errorText="Couldn't load your conversations."
+          emptyText="No conversations yet — open any billboard and tap “Message” to ask its owner a question, no booking needed."
+          onRetry={() => refetchThreads()}
+          className="mt-3"
+        >
           <div className="mt-3 space-y-2">
             {threads.map((thread) => (
               <button
@@ -73,16 +85,22 @@ export function MessagesTab() {
               </button>
             ))}
           </div>
-        )}
+        </ListState>
       </div>
 
       <div>
         <h3 className="font-display text-lg font-semibold tracking-tight">
           Start a conversation
         </h3>
+        <p className="mt-0.5 text-xs text-ink/50 dark:text-paper/50">
+          You can message any owner from a billboard's details, before or
+          after booking. Billboards you've booked are listed here for quick
+          access.
+        </p>
         {startableIds.length === 0 ? (
           <p className="mt-3 text-sm text-ink/40 dark:text-paper/40">
-            Book a billboard to unlock a direct line to its owner.
+            Nothing to start here — billboards you book will show up for a
+            quick message.
           </p>
         ) : (
           <div className="mt-3 space-y-2">
@@ -128,16 +146,24 @@ function StartChatButton({
 }) {
   const startThread = useStartChatThread()
   return (
-    <Button
-      size="sm"
-      disabled={startThread.isPending}
-      onClick={async () => {
-        const thread = await startThread.mutateAsync(billboardId)
-        onStarted({ id: thread.id, title: ownerName })
-      }}
-    >
-      <MessageCircle className="size-3.5" />
-      Message
-    </Button>
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      <Button
+        size="sm"
+        disabled={startThread.isPending}
+        onClick={() =>
+          startThread.mutate(billboardId, {
+            onSuccess: (thread) => onStarted({ id: thread.id, title: ownerName }),
+          })
+        }
+      >
+        <MessageCircle className="size-3.5" />
+        {startThread.isPending ? 'Opening…' : 'Message'}
+      </Button>
+      {startThread.isError && (
+        <span role="alert" className="text-[11px] text-brand-error">
+          Couldn't open the chat.
+        </span>
+      )}
+    </div>
   )
 }

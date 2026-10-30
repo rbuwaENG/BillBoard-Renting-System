@@ -1,11 +1,20 @@
 import { X } from 'lucide-react'
 import { useState } from 'react'
-import { Badge, Button, Card } from '@/components'
-import { useBillboards, type BillboardWithDetails } from '@/features/billboards/useBillboards'
+import { Badge, Card } from '@/components'
+import { isInProgress } from '@/features/bookings'
+import { useRequestBooking } from '@/features/bookings/useRequestBooking'
+import { CampaignDraftForm } from '@/features/campaigns/CampaignDraftForm'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
-import { useFormatPrice } from '@/features/admin/useCurrencySetting'
+import { useListedDraft } from '@/features/campaigns/useListedDraft'
+import { todayISO } from '@/features/bookings/dateRange'
 import { formatDateRange } from './formatDateRange'
-import { useCreateCampaign, useMyCampaigns } from './useCampaigns'
+import { ListState } from './ListState'
+import {
+  useMyCampaigns,
+  type Campaign,
+  type CampaignItem,
+} from './useCampaigns'
+import { useMyBookings } from './useMyBookings'
 
 interface CampaignsTabProps {
   onSelectBillboard: (id: string) => void
@@ -17,66 +26,26 @@ const STATUS_BADGE_CLASSES: Record<string, string> = {
   pending: 'border-ink/20 text-ink/60 dark:border-paper/20 dark:text-paper/60',
 }
 
+const STATUS_LABEL: Record<string, string> = {
+  booked: 'Requested',
+  failed: 'Not booked',
+  pending: 'Pending',
+}
+
 // The full create-campaign flow, surfaced here (not only in the small
-// map-corner FolderPlus popover in MapOverlayControls.tsx) so it's
-// discoverable from the same panel where bookings/messages already live.
+// map-corner cart popover in MapOverlayControls.tsx) so it's discoverable
+// from the same panel where bookings/messages already live.
 export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
-  const formatPrice = useFormatPrice()
-  const { data: billboardsData } = useBillboards()
-  const billboards = billboardsData ?? []
-  const draftIds = useCampaignStore((s) => s.draftIds)
   const removeFromDraft = useCampaignStore((s) => s.removeFromDraft)
-  const clearDraft = useCampaignStore((s) => s.clearDraft)
-  const { data: campaignsData } = useMyCampaigns()
+  const { draftBillboards, staleIds } = useListedDraft()
+  const {
+    data: campaignsData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useMyCampaigns()
   const campaigns = campaignsData ?? []
-  const createCampaign = useCreateCampaign()
-
-  const [name, setName] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-
-  const draftBillboards = draftIds
-    .map((id) => billboards.find((b) => b.id === id))
-    .filter((b): b is BillboardWithDetails => Boolean(b))
-
-  const datesInvalid = !!startDate && !!endDate && endDate < startDate
-  const draftDays =
-    startDate && endDate && !datesInvalid
-      ? Math.max(
-          1,
-          Math.round(
-            (new Date(endDate).getTime() - new Date(startDate).getTime()) /
-              86_400_000,
-          ) + 1,
-        )
-      : 0
-  const draftTotal =
-    draftBillboards.reduce((sum, b) => sum + b.pricePerDay, 0) * draftDays
-
-  async function handleCreate() {
-    if (
-      !name.trim() ||
-      !startDate ||
-      !endDate ||
-      datesInvalid ||
-      draftBillboards.length === 0
-    )
-      return
-    try {
-      await createCampaign.mutateAsync({
-        name: name.trim(),
-        startDate,
-        endDate,
-        billboardIds: draftBillboards.map((b) => b.id),
-      })
-      setName('')
-      setStartDate('')
-      setEndDate('')
-      clearDraft()
-    } catch {
-      // error surfaced via createCampaign.error below
-    }
-  }
 
   return (
     <div className="space-y-8">
@@ -85,8 +54,8 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
           Draft
         </h3>
         <p className="mt-0.5 text-xs text-ink/50 dark:text-paper/50">
-          Add billboards to your draft from Browse or the map, then bundle
-          them into a campaign below.
+          Add billboards to your draft from Browse or the map, then bundle them
+          into a campaign below.
         </p>
 
         {draftBillboards.length === 0 ? (
@@ -111,6 +80,7 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
                   type="button"
                   onClick={() => removeFromDraft(b.id)}
                   title="Remove"
+                  aria-label={`Remove ${b.title} from draft`}
                   className="shrink-0 text-ink/40 hover:text-brand-error dark:text-paper/40"
                 >
                   <X className="size-3.5" />
@@ -120,58 +90,25 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
           </ul>
         )}
 
-        <div className="mt-4 space-y-2 border-t border-dashed border-ink/15 pt-4 dark:border-paper/15">
-          <input
-            type="text"
-            placeholder="Campaign name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full border border-ink/15 bg-transparent px-2 py-1.5 text-sm focus:border-accent focus:outline-none dark:border-paper/15"
-          />
-          <div className="flex gap-2">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-1/2 border border-ink/15 bg-transparent px-2 py-1.5 text-xs focus:border-accent focus:outline-none dark:border-paper/15"
-            />
-            <input
-              type="date"
-              value={endDate}
-              min={startDate || undefined}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-1/2 border border-ink/15 bg-transparent px-2 py-1.5 text-xs focus:border-accent focus:outline-none dark:border-paper/15"
-            />
-          </div>
-          {datesInvalid && (
-            <p className="text-xs text-brand-error">
-              End date must be on or after the start date.
-            </p>
-          )}
-          {draftDays > 0 && draftBillboards.length > 0 && (
-            <p className="text-right font-mono text-xs text-accent">
-              Est. total {formatPrice(draftTotal)}
-            </p>
-          )}
-          {createCampaign.isError && (
-            <p className="text-xs text-brand-error">
-              {(createCampaign.error as Error).message}
-            </p>
-          )}
-          <Button
-            className="w-full"
-            disabled={
-              !name.trim() ||
-              !startDate ||
-              !endDate ||
-              datesInvalid ||
-              draftBillboards.length === 0 ||
-              createCampaign.isPending
-            }
-            onClick={handleCreate}
-          >
-            {createCampaign.isPending ? 'Creating campaign…' : 'Create campaign'}
-          </Button>
+        {staleIds.length > 0 && (
+          <p className="mt-2 flex items-center justify-between gap-2 text-xs text-ink/50 dark:text-paper/50">
+            <span>
+              {staleIds.length === 1
+                ? '1 billboard in your draft is no longer listed.'
+                : `${staleIds.length} billboards in your draft are no longer listed.`}
+            </span>
+            <button
+              type="button"
+              onClick={() => staleIds.forEach(removeFromDraft)}
+              className="shrink-0 font-mono text-[11px] text-accent uppercase hover:underline"
+            >
+              Remove
+            </button>
+          </p>
+        )}
+
+        <div className="mt-4 border-t border-dashed border-ink/15 pt-4 dark:border-paper/15">
+          <CampaignDraftForm draftBillboards={draftBillboards} />
         </div>
       </div>
 
@@ -180,48 +117,143 @@ export function CampaignsTab({ onSelectBillboard }: CampaignsTabProps) {
           My campaigns
         </h3>
 
-        {campaigns.length === 0 ? (
-          <p className="mt-3 text-sm text-ink/40 dark:text-paper/40">
-            No campaigns yet — add billboards to a draft from Browse, then
-            create one.
-          </p>
-        ) : (
+        <ListState
+          isLoading={isLoading}
+          isError={isError}
+          error={error}
+          isEmpty={campaigns.length === 0}
+          loadingText="Loading campaigns…"
+          errorText="Couldn't load your campaigns."
+          emptyText="No campaigns yet — add billboards to a draft from Browse, then create one."
+          onRetry={() => refetch()}
+          className="mt-3"
+        >
           <div className="mt-3 space-y-3">
             {campaigns.map((campaign) => (
-              <Card key={campaign.id} className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-display text-sm font-semibold tracking-tight">
-                      {campaign.name}
-                    </p>
-                    <p className="mt-0.5 font-mono text-[11px] tracking-wide text-ink/50 uppercase dark:text-paper/50">
-                      {formatDateRange(campaign.startDate, campaign.endDate)}{' '}
-                      · {campaign.items.length} billboard
-                      {campaign.items.length !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {campaign.items.map((item) => (
-                    <button
-                      key={item.billboardId}
-                      type="button"
-                      onClick={() => onSelectBillboard(item.billboardId)}
-                      title={item.failureReason ?? undefined}
-                      className="flex items-center gap-1.5 border border-ink/15 px-2 py-1 font-mono text-[11px] uppercase text-ink/70 hover:border-accent hover:text-accent dark:border-paper/15 dark:text-paper/70"
-                    >
-                      {item.billboardTitle}
-                      <Badge className={STATUS_BADGE_CLASSES[item.status]}>
-                        {item.status}
-                      </Badge>
-                    </button>
-                  ))}
-                </div>
-              </Card>
+              <CampaignCard
+                key={campaign.id}
+                campaign={campaign}
+                onSelectBillboard={onSelectBillboard}
+              />
             ))}
           </div>
-        )}
+        </ListState>
       </div>
     </div>
+  )
+}
+
+function CampaignCard({
+  campaign,
+  onSelectBillboard,
+}: {
+  campaign: Campaign
+  onSelectBillboard: (id: string) => void
+}) {
+  const failedCount = campaign.items.filter((i) => i.status === 'failed').length
+  return (
+    <Card className="p-4">
+      <div>
+        <p className="font-display text-sm font-semibold tracking-tight">
+          {campaign.name}
+        </p>
+        <p className="mt-0.5 font-mono text-[11px] tracking-wide text-ink/50 uppercase dark:text-paper/50">
+          {formatDateRange(campaign.startDate, campaign.endDate)} ·{' '}
+          {campaign.items.length} billboard
+          {campaign.items.length !== 1 ? 's' : ''}
+          {failedCount > 0 && ` · ${failedCount} not booked`}
+        </p>
+      </div>
+      <ul className="mt-3 space-y-1.5">
+        {campaign.items.map((item) => (
+          <CampaignItemRow
+            key={item.billboardId}
+            item={item}
+            campaign={campaign}
+            onSelectBillboard={onSelectBillboard}
+          />
+        ))}
+      </ul>
+    </Card>
+  )
+}
+
+// Failed items show their reason inline. "Book separately" retries with
+// request_booking for the campaign's dates — the campaign item itself can't
+// be updated from the client, so the new request appears under Bookings.
+function CampaignItemRow({
+  item,
+  campaign,
+  onSelectBillboard,
+}: {
+  item: CampaignItem
+  campaign: Campaign
+  onSelectBillboard: (id: string) => void
+}) {
+  const requestBooking = useRequestBooking()
+  const { data: myBookings } = useMyBookings()
+  const [retried, setRetried] = useState(false)
+  const alreadyRequested =
+    retried ||
+    (myBookings ?? []).some(
+      (b) =>
+        b.billboardId === item.billboardId &&
+        b.startDate === campaign.startDate &&
+        b.endDate === campaign.endDate &&
+        isInProgress(b.status),
+    )
+  const canRetry = item.status === 'failed' && campaign.startDate >= todayISO()
+
+  return (
+    <li className="border border-ink/10 px-2.5 py-2 dark:border-paper/15">
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => onSelectBillboard(item.billboardId)}
+          className="min-w-0 truncate text-left font-mono text-[11px] text-ink/70 uppercase hover:text-accent dark:text-paper/70"
+        >
+          {item.billboardTitle}
+        </button>
+        <Badge className={STATUS_BADGE_CLASSES[item.status]}>
+          {STATUS_LABEL[item.status] ?? item.status}
+        </Badge>
+      </div>
+      {item.status === 'failed' && (
+        <div className="mt-1.5 flex flex-wrap items-start justify-between gap-2">
+          <p className="min-w-0 flex-1 text-xs text-brand-error">
+            {item.failureReason ?? 'This billboard could not be booked.'}
+          </p>
+          {canRetry &&
+            (alreadyRequested ? (
+              <span className="shrink-0 font-mono text-[11px] text-brand-success uppercase">
+                Requested separately
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={requestBooking.isPending}
+                onClick={() =>
+                  requestBooking.mutate(
+                    {
+                      billboardId: item.billboardId,
+                      startDate: campaign.startDate,
+                      endDate: campaign.endDate,
+                    },
+                    { onSuccess: () => setRetried(true) },
+                  )
+                }
+                className="shrink-0 font-mono text-[11px] text-accent uppercase hover:underline disabled:opacity-50"
+              >
+                {requestBooking.isPending ? 'Requesting…' : 'Book separately'}
+              </button>
+            ))}
+        </div>
+      )}
+      {requestBooking.isError && (
+        <p role="alert" className="mt-1 text-xs text-brand-error">
+          Retry failed: {(requestBooking.error as Error).message}
+        </p>
+      )}
+    </li>
   )
 }

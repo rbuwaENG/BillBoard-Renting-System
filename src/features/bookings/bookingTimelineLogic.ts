@@ -1,5 +1,10 @@
+import type { PaymentState } from '@/features/payments/paymentState'
 import type { Booking } from '@/types'
+import type { AnyBookingStatus } from './bookingStatus'
 import type { BookingEvent } from './useBookingEvents'
+
+export const EXPIRED_REQUEST_COPY = "Request expired — the owner didn't respond in time"
+export const EXPIRED_PAYMENT_COPY = "Booking expired — payment wasn't completed in time"
 
 export type TimelineStageState = 'completed' | 'current' | 'upcoming' | 'blocked'
 export type TimelineActor = 'customer' | 'owner' | 'platform'
@@ -17,6 +22,9 @@ export interface TimelineContext {
   viewerRole: 'renter' | 'owner'
   ownerName: string
   renterName: string
+  // Renter-side payment submission state (renter_submit_payment); omitted →
+  // nothing submitted yet.
+  paymentState?: PaymentState
 }
 
 export interface AwaitingDocumentsInfo {
@@ -51,6 +59,8 @@ export function computeBookingTimeline(
   const stages: TimelineStage[] = []
   const awaiting = getAwaitingDocumentsInfo(events)
   const isRenter = ctx.viewerRole === 'renter'
+  const status = booking.status as AnyBookingStatus
+  const paymentState = ctx.paymentState ?? 'none'
 
   stages.push({
     key: 'submitted',
@@ -99,6 +109,39 @@ export function computeBookingTimeline(
       state: 'blocked',
       timestamp: findEventTimestamp(events, 'cancelled'),
       description: 'This booking was cancelled before the rental began.',
+      actor: 'platform',
+    })
+    return stages
+  }
+
+  if (status === 'expired') {
+    const wasApproved = events.some((e) => e.toStatus === 'payment_pending')
+    stages.push({
+      key: 'review',
+      label: 'Owner Reviewing',
+      state: wasApproved ? 'completed' : 'blocked',
+      timestamp: booking.createdAt,
+    })
+    if (wasApproved) {
+      stages.push({
+        key: 'payment',
+        label: 'Payment Pending',
+        state: 'completed',
+        timestamp: findEventTimestamp(events, 'payment_pending') ?? booking.decisionAt,
+      })
+    }
+    stages.push({
+      key: 'expired',
+      label: 'Request Expired',
+      state: 'blocked',
+      timestamp: findEventTimestamp(events, 'expired') ?? booking.updatedAt,
+      description: wasApproved
+        ? isRenter
+          ? `${EXPIRED_PAYMENT_COPY}. You can request these dates again if they're still free.`
+          : `${EXPIRED_PAYMENT_COPY}.`
+        : isRenter
+          ? `${EXPIRED_REQUEST_COPY}. You can send a new request.`
+          : "This request expired because it wasn't answered in time.",
       actor: 'platform',
     })
     return stages
@@ -156,9 +199,15 @@ export function computeBookingTimeline(
         state: 'current',
         timestamp: booking.decisionAt,
         description: isRenter
-          ? 'Your booking is awaiting payment. Complete the payment to proceed.'
-          : `Waiting on ${ctx.renterName} to complete payment.`,
-        actor: 'customer',
+          ? paymentState === 'submitted'
+            ? "Payment submitted — awaiting admin confirmation. We'll notify you once it's confirmed."
+            : paymentState === 'rejected'
+              ? 'Payment rejected — please check your transfer and resubmit.'
+              : 'Your booking is approved. Pay the quoted amount by bank transfer, then tap “I’ve paid”.'
+          : paymentState === 'submitted'
+            ? `${ctx.renterName} submitted a payment — awaiting admin confirmation.`
+            : `Waiting on ${ctx.renterName} to complete payment.`,
+        actor: paymentState === 'submitted' ? 'platform' : 'customer',
       })
     }
   } else if (booking.status === 'confirmed' || booking.status === 'active' || booking.status === 'completed') {

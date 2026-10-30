@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useState } from 'react'
 import type { Booking } from '@/types'
-import { STATUS_LABEL } from './BookingStatusBadge'
+import { STATUS_LABEL } from './bookingStatus'
 import type { BookingEvent } from './useBookingEvents'
 
 function describeEvent(event: BookingEvent): string {
