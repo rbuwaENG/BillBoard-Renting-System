@@ -87,6 +87,7 @@ export function useCreateCampaign() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['my-campaigns'] })
+      qc.invalidateQueries({ queryKey: ['booked-ranges'] })
       qc.invalidateQueries({ queryKey: ['my-bookings'] })
       qc.invalidateQueries({ queryKey: ['owner-bookings'] })
     },

@@ -6,6 +6,7 @@ import { CampaignDraftForm } from '@/features/campaigns/CampaignDraftForm'
 import { useCampaignStore } from '@/features/campaigns/campaignStore'
 import { useListedDraft } from '@/features/campaigns/useListedDraft'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
+import { todayISO, validateDateRange } from '@/features/bookings/dateRange'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { MapIconButton } from './MapIconButton'
@@ -28,6 +29,9 @@ interface MapOverlayControlsProps {
   onPriceMaxChange: (price: number) => void
   myBillboardsActive: boolean
   onToggleMyBillboards: () => void
+  availableFrom: string
+  availableTo: string
+  onAvailableChange: (from: string, to: string) => void
   nearMeActive: boolean
   onLocateMe: () => void
   onDisableNearMe: () => void
@@ -62,6 +66,75 @@ function ChipButton({
     >
       {children}
     </button>
+  )
+}
+
+function AvailableBetweenFilter({
+  from,
+  to,
+  onChange,
+}: {
+  from: string
+  to: string
+  onChange: (from: string, to: string) => void
+}) {
+  const today = todayISO()
+  const errors = validateDateRange(from, to, today)
+  const inputClass =
+    'w-full border border-ink/15 bg-transparent px-1.5 py-1 text-xs focus:border-accent focus:outline-none dark:border-paper/15'
+  return (
+    <div
+      role="group"
+      aria-label="Available between"
+      className="border-t border-dashed border-ink/15 pt-3 dark:border-paper/15"
+    >
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[11px] tracking-widest text-ink/50 uppercase dark:text-paper/50">
+          Available between
+        </span>
+        {(from || to) && (
+          <button
+            type="button"
+            onClick={() => onChange('', '')}
+            className="font-mono text-[11px] text-accent uppercase hover:underline"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <label className="block w-1/2">
+          <span className="sr-only">Available from</span>
+          <input
+            type="date"
+            value={from}
+            min={today}
+            aria-invalid={!!errors.start}
+            onChange={(e) => {
+              const next = e.target.value
+              onChange(next, to && next && to < next ? '' : to)
+            }}
+            className={inputClass}
+          />
+        </label>
+        <label className="block w-1/2">
+          <span className="sr-only">Available until</span>
+          <input
+            type="date"
+            value={to}
+            min={from && from > today ? from : today}
+            aria-invalid={!!errors.end}
+            onChange={(e) => onChange(from, e.target.value)}
+            className={inputClass}
+          />
+        </label>
+      </div>
+      {(errors.start || errors.end) && (
+        <p role="alert" className="mt-1 text-[11px] text-brand-error">
+          {errors.start ?? errors.end}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -190,6 +263,9 @@ export function MapOverlayControls({
   onPriceMaxChange,
   myBillboardsActive,
   onToggleMyBillboards,
+  availableFrom,
+  availableTo,
+  onAvailableChange,
   nearMeActive,
   onLocateMe,
   onDisableNearMe,
@@ -243,13 +319,14 @@ export function MapOverlayControls({
 
       <div className="pointer-events-auto relative">
         <MapIconButton
-          title="Filter by category, size, district & price"
+          title="Filter by category, size, district, price & dates"
           active={
             filtersOpen ||
             selectedCategories.size > 0 ||
             selectedSizes.size > 0 ||
             selectedDistricts.size > 0 ||
-            priceMax < priceCeil
+            priceMax < priceCeil ||
+            (!!availableFrom && !!availableTo)
           }
           onClick={() => togglePopover('filters')}
         >
@@ -330,6 +407,12 @@ export function MapOverlayControls({
                 className="mt-2 w-full accent-accent"
               />
             </div>
+
+            <AvailableBetweenFilter
+              from={availableFrom}
+              to={availableTo}
+              onChange={onAvailableChange}
+            />
 
             {showMyBillboards && (
               <div className="flex items-center justify-between border-t border-dashed border-ink/15 pt-3 dark:border-paper/15">

@@ -7,8 +7,9 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useState } from 'react'
-import { Badge, BillboardMark, Button, Card } from '@/components'
+import { Badge, Button, Card } from '@/components'
 import { useFormatPrice } from '@/features/admin/useCurrencySetting'
+import { BillboardPhoto } from '@/features/billboards/BillboardPhoto'
 import { cn } from '@/lib/utils'
 import { BillboardFormDialog } from './BillboardFormDialog'
 import { errorMessage } from './errors'
@@ -139,9 +140,12 @@ export function MyBillboardsPanel() {
             return (
               <Card key={b.id} className="p-4">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-3 sm:flex-nowrap">
-                  <div className="flex size-11 shrink-0 items-center justify-center bg-paper-dim dark:bg-ink">
-                    <BillboardMark className="size-4 text-ink/15 dark:text-paper/15" />
-                  </div>
+                  <BillboardPhoto
+                    src={b.images[0]}
+                    alt={`Cover photo of ${b.title}`}
+                    className="size-11 shrink-0"
+                    markClassName="size-4"
+                  />
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">

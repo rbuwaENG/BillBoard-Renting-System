@@ -16,6 +16,8 @@ interface BillboardPanelProps {
   locateStatus: LocateStatus
   distanceById: Map<string, number>
   emptyMessage: string
+  // Status line above the results (e.g. availability-filter progress).
+  notice?: string
   isLoading?: boolean
   isError?: boolean
   error?: unknown
@@ -34,6 +36,7 @@ export function BillboardPanel({
   locateStatus,
   distanceById,
   emptyMessage,
+  notice,
   isLoading = false,
   isError = false,
   error,
@@ -93,6 +96,14 @@ export function BillboardPanel({
 
       {listOpen && (
         <div className="pointer-events-auto flex max-h-[60svh] flex-col gap-2 overflow-y-auto border border-ink/10 bg-paper/95 p-3 shadow-lg backdrop-blur-sm dark:border-paper/10 dark:bg-ink/95">
+          {notice && !isLoading && !isError && (
+            <p
+              role="status"
+              className="font-mono text-[11px] text-ink/60 dark:text-paper/60"
+            >
+              {notice}
+            </p>
+          )}
           <ListState
             isLoading={isLoading}
             isError={isError}
