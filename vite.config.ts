@@ -12,6 +12,34 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Long-lived vendor chunks: they change far less often than app code,
+        // so returning visitors keep them cached across deploys. Leaflet is
+        // only pulled in by the map pages, so it stays off the entry path.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (
+            /[\\/]node_modules[\\/](leaflet|react-leaflet|@react-leaflet)[\\/]/.test(
+              id,
+            )
+          ) {
+            return 'leaflet'
+          }
+          if (/[\\/]node_modules[\\/]@supabase[\\/]/.test(id)) return 'supabase'
+          if (
+            /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|@remix-run)[\\/]/.test(
+              id,
+            )
+          ) {
+            return 'react'
+          }
+          return undefined
+        },
+      },
+    },
+  },
   test: {
     globals: true,
     environment: 'jsdom',

@@ -2,8 +2,10 @@ import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import type { UserRole } from '@/types'
 
-// Phase 2 ("Auth & roles") wires `useAuth` to real Firebase state; until
-// then this correctly redirects to /login since no session exists yet.
+// Gate a route subtree on the Supabase session + profile role from
+// `useAuth`. Renders nothing while the session is still being restored, so a
+// signed-in user isn't bounced to /login on a hard refresh. (Role checks here
+// are UX only — the database's RLS policies are the real access control.)
 export function RoleGuard({ allow }: { allow: UserRole[] }) {
   const { user, isLoading } = useAuth()
 

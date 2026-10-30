@@ -1,5 +1,5 @@
-// Mirrors the Firestore schema in PLAN.md section 3. Kept minimal for the
-// scaffold phase; fields will grow as each feature phase lands.
+// Client-side (camelCase) domain types for the Supabase tables defined in
+// supabase/migrations. Hooks map snake_case rows into these shapes.
 
 export type UserRole = 'renter' | 'rentor' | 'admin'
 

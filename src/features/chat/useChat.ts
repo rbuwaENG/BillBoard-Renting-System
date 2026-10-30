@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { uniqueChannelName } from '@/lib/realtime'
 import { supabase } from '@/lib/supabase'
 
 export interface ChatThread {
@@ -94,7 +95,7 @@ export function useChatMessages(threadId: string | undefined) {
   useEffect(() => {
     if (!threadId) return
     const channel = supabase
-      .channel(`chat-messages:${threadId}`)
+      .channel(uniqueChannelName(`chat-messages:${threadId}`))
       .on(
         'postgres_changes',
         {
@@ -165,7 +166,8 @@ export interface ChatThreadPreview extends ChatThread {
 interface ThreadPreviewRow extends ChatThreadRow {
   billboards: { title: string } | null
   counterpart: { display_name: string }[] | { display_name: string } | null
-  chat_messages: { body: string; sender_id: string; created_at: string }[] | null
+  chat_messages:
+    { body: string; sender_id: string; created_at: string }[] | null
 }
 
 function toThreadPreview(row: ThreadPreviewRow): ChatThreadPreview {
@@ -198,7 +200,10 @@ export function useMyChatThreads() {
           '*, billboards(title), counterpart:profiles!chat_threads_owner_id_fkey(display_name), chat_messages(body, sender_id, created_at)',
         )
         .eq('renter_id', user!.uid)
-        .order('created_at', { foreignTable: 'chat_messages', ascending: false })
+        .order('created_at', {
+          foreignTable: 'chat_messages',
+          ascending: false,
+        })
         .limit(1, { foreignTable: 'chat_messages' })
       if (error) throw error
       return (data as unknown as ThreadPreviewRow[]).map(toThreadPreview)
@@ -219,7 +224,10 @@ export function useOwnerChatThreads() {
           '*, billboards(title), counterpart:profiles!chat_threads_renter_id_fkey(display_name), chat_messages(body, sender_id, created_at)',
         )
         .eq('owner_id', user!.uid)
-        .order('created_at', { foreignTable: 'chat_messages', ascending: false })
+        .order('created_at', {
+          foreignTable: 'chat_messages',
+          ascending: false,
+        })
         .limit(1, { foreignTable: 'chat_messages' })
       if (error) throw error
       return (data as unknown as ThreadPreviewRow[]).map(toThreadPreview)
