@@ -13,6 +13,7 @@ export default defineConfig({
   },
   test: {
     include: ['src/test/db/**/*.test.ts'],
+    exclude: ['.claude/worktrees/**', 'node_modules/**'],
     environment: 'node',
     // Building the migrated snapshot (PostGIS + all migrations) takes a few
     // seconds once per test file; individual RPC tests are fast.
