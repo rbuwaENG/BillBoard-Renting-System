@@ -1,5 +1,5 @@
 import { ArrowLeft, Paperclip, Send, X } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '@/components'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
@@ -13,35 +13,70 @@ interface ChatPanelProps {
   onBack: () => void
 }
 
+function describeError(err: unknown) {
+  if (err && typeof err === 'object' && 'message' in err) {
+    const message = (err as { message: unknown }).message
+    if (typeof message === 'string' && message) return message
+  }
+  return 'Please try again.'
+}
+
 export function ChatPanel({ threadId, title, onBack }: ChatPanelProps) {
   const { user } = useAuth()
-  const { data } = useChatMessages(threadId)
+  const { data, isLoading, isError, refetch } = useChatMessages(threadId)
   const messages = data ?? []
   const sendMessage = useSendChatMessage()
   const [draft, setDraft] = useState('')
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const [fileInputKey, setFileInputKey] = useState(0)
   const [uploading, setUploading] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
+  // Synchronous guard: state updates don't land between two fast Enter
+  // presses, so a ref is what actually prevents a double send.
+  const inFlight = useRef(false)
+
+  const sending = uploading || sendMessage.isPending
+  const canSend = !sending && (!!draft.trim() || !!attachmentFile)
 
   async function handleSend() {
     const body = draft.trim()
-    if ((!body && !attachmentFile) || !user) return
+    if ((!body && !attachmentFile) || !user || inFlight.current) return
+    inFlight.current = true
+    setSendError(null)
 
-    let attachmentPath: string | undefined
-    if (attachmentFile) {
-      setUploading(true)
+    try {
+      let attachmentPath: string | undefined
+      if (attachmentFile) {
+        setUploading(true)
+        try {
+          attachmentPath = await uploadChatAttachment(attachmentFile, threadId)
+        } catch (err) {
+          setSendError(`Attachment upload failed: ${describeError(err)}`)
+          return
+        } finally {
+          setUploading(false)
+        }
+      }
+
       try {
-        attachmentPath = await uploadChatAttachment(attachmentFile, threadId)
+        await sendMessage.mutateAsync({
+          threadId,
+          senderId: user.uid,
+          body,
+          attachmentPath,
+        })
       } catch (err) {
-        console.error('Attachment upload failed:', err)
-        setUploading(false)
+        // Keep the draft and attachment so the user can retry.
+        setSendError(`Message not sent: ${describeError(err)}`)
         return
       }
-      setUploading(false)
-    }
 
-    sendMessage.mutate({ threadId, senderId: user.uid, body, attachmentPath })
-    setDraft('')
-    setAttachmentFile(null)
+      setDraft('')
+      setAttachmentFile(null)
+      setFileInputKey((k) => k + 1)
+    } finally {
+      inFlight.current = false
+    }
   }
 
   return (
@@ -49,7 +84,7 @@ export function ChatPanel({ threadId, title, onBack }: ChatPanelProps) {
       <button
         type="button"
         onClick={onBack}
-        className="flex items-center gap-1.5 font-mono text-[11px] tracking-widest text-ink/50 uppercase hover:text-ink dark:text-paper/50 dark:hover:text-paper"
+        className="flex items-center gap-1.5 self-start font-mono text-[11px] tracking-widest text-ink/50 uppercase hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:outline-none dark:text-paper/50 dark:hover:text-paper"
       >
         <ArrowLeft className="size-3.5" />
         Back
@@ -59,8 +94,30 @@ export function ChatPanel({ threadId, title, onBack }: ChatPanelProps) {
         Chat with {title}
       </h3>
 
-      <div className="mt-4 flex-1 space-y-3 overflow-y-auto border-y border-dashed border-ink/15 py-4 dark:border-paper/15">
-        {messages.length === 0 ? (
+      <div
+        aria-live="polite"
+        className="mt-4 flex-1 space-y-3 overflow-y-auto border-y border-dashed border-ink/15 py-4 dark:border-paper/15"
+      >
+        {isLoading ? (
+          <p
+            role="status"
+            className="py-6 text-center text-sm text-ink/40 dark:text-paper/40"
+          >
+            Loading messages…
+          </p>
+        ) : isError ? (
+          <div role="alert" className="py-6 text-center">
+            <p className="text-sm text-brand-error">Couldn't load messages.</p>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="mt-2"
+              onClick={() => refetch()}
+            >
+              Try again
+            </Button>
+          </div>
+        ) : messages.length === 0 ? (
           <p className="py-6 text-center text-sm text-ink/40 dark:text-paper/40">
             Say hello — ask about availability, pricing, or creative specs.
           </p>
@@ -81,7 +138,9 @@ export function ChatPanel({ threadId, title, onBack }: ChatPanelProps) {
                     : 'border-ink/15 bg-paper text-ink dark:border-paper/15 dark:bg-ink-soft dark:text-paper',
                 )}
               >
-                {m.attachmentPath && <ChatAttachmentBubble path={m.attachmentPath} />}
+                {m.attachmentPath && (
+                  <ChatAttachmentBubble path={m.attachmentPath} />
+                )}
                 {m.body && <p>{m.body}</p>}
               </div>
             </div>
@@ -95,8 +154,13 @@ export function ChatPanel({ threadId, title, onBack }: ChatPanelProps) {
           <span className="min-w-0 flex-1 truncate">{attachmentFile.name}</span>
           <button
             type="button"
-            onClick={() => setAttachmentFile(null)}
+            onClick={() => {
+              setAttachmentFile(null)
+              setFileInputKey((k) => k + 1)
+            }}
+            disabled={sending}
             title="Remove attachment"
+            aria-label="Remove attachment"
             className="shrink-0 text-ink/40 hover:text-brand-error dark:text-paper/40"
           >
             <X className="size-3.5" />
@@ -104,17 +168,29 @@ export function ChatPanel({ threadId, title, onBack }: ChatPanelProps) {
         </div>
       )}
 
+      {sendError && (
+        <p role="alert" className="mt-3 text-xs text-brand-error">
+          {sendError}
+        </p>
+      )}
+
       <div className="mt-3 flex gap-2">
         <label
           title="Attach an image, video, or file"
-          className="flex shrink-0 cursor-pointer items-center justify-center border border-ink/15 px-3 text-ink/60 hover:text-ink dark:border-paper/15 dark:text-paper/60 dark:hover:text-paper"
+          className="flex shrink-0 cursor-pointer items-center justify-center border border-ink/15 px-3 text-ink/60 focus-within:ring-2 focus-within:ring-accent/60 hover:text-ink dark:border-paper/15 dark:text-paper/60 dark:hover:text-paper"
         >
           <Paperclip className="size-4" />
           <input
+            key={fileInputKey}
             type="file"
             accept="image/*,video/*,application/pdf"
-            className="hidden"
-            onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)}
+            aria-label="Attach an image, video, or file"
+            className="sr-only"
+            disabled={sending}
+            onChange={(e) => {
+              setAttachmentFile(e.target.files?.[0] ?? null)
+              setSendError(null)
+            }}
           />
         </label>
         <input
@@ -122,17 +198,23 @@ export function ChatPanel({ threadId, title, onBack }: ChatPanelProps) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') handleSend()
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+              e.preventDefault()
+              if (canSend) void handleSend()
+            }
           }}
+          aria-label="Message"
           placeholder="Type a message…"
           className="w-full border border-ink/15 bg-transparent px-3 py-2 text-sm placeholder:text-ink/30 focus:border-accent focus:outline-none dark:border-paper/15 dark:placeholder:text-paper/30"
         />
         <Button
-          onClick={handleSend}
-          disabled={uploading || (!draft.trim() && !attachmentFile)}
+          onClick={() => void handleSend()}
+          disabled={!canSend}
+          aria-label={sending ? 'Sending message' : 'Send message'}
+          title="Send"
           className="shrink-0 px-3"
         >
-          {uploading ? '…' : <Send className="size-4" />}
+          {sending ? '…' : <Send className="size-4" />}
         </Button>
       </div>
     </div>

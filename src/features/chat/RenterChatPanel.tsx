@@ -20,7 +20,9 @@ export function RenterChatPanel({
     return (
       <div className="flex h-full min-h-[22rem] items-center justify-center">
         <p className="text-sm text-ink/40 dark:text-paper/40">
-          {isLoading ? 'Opening conversation…' : 'Could not open this conversation.'}
+          {isLoading
+            ? 'Opening conversation…'
+            : 'Could not open this conversation.'}
         </p>
       </div>
     )
