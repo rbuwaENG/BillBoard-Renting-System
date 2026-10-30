@@ -134,5 +134,12 @@ export function useAuth() {
   const user = useAuthStore((s) => s.user)
   const isLoading = useAuthStore((s) => s.isLoading)
   const profileError = useAuthStore((s) => s.profileError)
-  return { user, isLoading, profileError, role: user?.role ?? null }
+  const reloadProfile = useAuthStore((s) => s.reloadProfile)
+  return {
+    user,
+    isLoading,
+    profileError,
+    reloadProfile,
+    role: user?.role ?? null,
+  }
 }
